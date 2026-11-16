@@ -1,0 +1,142 @@
+name: Build macOS, Windows & Android Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # JOB 1: Build macOS (.dmg / .app) & Windows (.exe / .msi)
+  build-desktop:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest"
+            args: "--target universal-apple-darwin"
+          - platform: "windows-latest"
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install Rust Stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install Frontend Dependencies
+        run: npm install
+
+      - name: Build & Upload Desktop Bundles
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          B1_TOKEN: ${{ secrets.B1_TOKEN }}
+        with:
+          tagName: v__VERSION__
+          releaseName: "B1 Worship Viewer v__VERSION__"
+          releaseBody: "Download the installer for macOS (.dmg), Windows (.exe), or Android (.apk) below."
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  # JOB 2: Build & Sign Android (.apk)
+  build-android:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Setup Java 17 (Required by Gradle/Android SDK)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Setup Android SDK & NDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK
+        run: |
+          sdkmanager --install "ndk;27.0.12077973" "build-tools;34.0.0" "platforms;android-34"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
+
+      - name: Install Rust & Android Targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install Frontend Dependencies
+        run: npm install
+
+      - name: Initialize Tauri Android Project (if not already committed)
+        run: |
+          if [ ! -d "src-tauri/gen/android" ]; then
+            npx tauri android init
+          fi
+
+      - name: Build Universal Android APK
+        env:
+          B1_TOKEN: ${{ secrets.B1_TOKEN }}
+        run: npx tauri android build --apk
+
+      - name: Sign APK for Direct Sideloading on Phones & Tablets
+        run: |
+          UNSIGNED_APK=$(find src-tauri/gen/android/app/build/outputs/apk/universal/release -name "*-unsigned.apk" | head -n 1)
+          SIGNED_APK="b1chordviewer-android-universal.apk"
+
+          # Generate a release keystore if not present and sign with Android build-tools apksigner
+          keytool -genkey -v -keystore release.keystore -alias b1worship \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android123 -keypass android123 \
+            -dname "CN=B1Worship, OU=Music, O=Church, L=City, S=State, C=US"
+
+          $ANDROID_HOME/build-tools/34.0.0/zipalign -v -p 4 "$UNSIGNED_APK" aligned.apk
+          $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
+            --ks release.keystore \
+            --ks-key-alias b1worship \
+            --ks-pass pass:android123 \
+            --key-pass pass:android123 \
+            --out "$SIGNED_APK" \
+            aligned.apk
+
+      - name: Attach Signed APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: b1chordviewer-android-universal.apk
+
+      - name: Upload APK as Workflow Artifact (for manual workflow_dispatch runs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: b1chordviewer-android-apk
+          path: b1chordviewer-android-universal.apk
