@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "b1chordviewer",
+  "productName": "B1 Chord Viewer",
   "version": "0.1.0",
   "identifier": "com.aerialist.b1chordviewer",
   "build": {
@@ -12,9 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "b1chordviewer",
-        "width": 800,
-        "height": 600
+        "title": "B1 Chord Viewer",
+        "width": 1100,
+        "height": 700
       }
     ],
     "security": {

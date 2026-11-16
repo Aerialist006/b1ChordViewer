@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { LayoutMode, NotationMode, UserConfig } from "../types";
+import {
+  LayoutMode,
+  NotationMode,
+  PASTEL_PRESETS,
+  PastelColorId,
+  UserConfig,
+} from "../types";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,16 +26,28 @@ import {
   Sun,
   Moon,
   Tags,
-  Sparkles,
+  Palette,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Check,
+  RefreshCw,
 } from "lucide-react";
 
 interface Props {
   config: UserConfig;
   onChangeConfig: (next: UserConfig) => void;
+  onSaveApiKeyAndSync: (newKey: string) => void;
 }
 
-export default function ConfigView({ config, onChangeConfig }: Props) {
+export default function ConfigView({
+  config,
+  onChangeConfig,
+  onSaveApiKeyAndSync,
+}: Props) {
   const [newSectionInput, setNewSectionInput] = useState("");
+  const [apiKeyDraft, setApiKeyDraft] = useState(config.apiKey || "");
+  const [showApiKey, setShowApiKey] = useState(false);
 
   function setNotation(notation: NotationMode) {
     onChangeConfig({ ...config, notation });
@@ -66,13 +84,226 @@ export default function ConfigView({ config, onChangeConfig }: Props) {
   return (
     <div className="max-w-4xl mx-auto p-6 md:p-8 space-y-6">
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Studio Settings</h1>
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+          Studio Settings
+        </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Customize how B1.church Nashville charts are transformed and displayed on your screen.
+          Configure your church's B1 API connection, pastel stage palette, and
+          chord layout.
         </p>
       </div>
 
-      {/* 1. Chord Notation Format */}
+      {/* 0. ChurchApps (B1) API Key Configuration */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4 text-primary" />
+            <CardTitle className="text-base">
+              ChurchApps (B1.church) API Key
+            </CardTitle>
+          </div>
+          <CardDescription>
+            Enter your church's B1 API token (starts with{" "}
+            <code className="font-mono">cak_</code>) to sync your service plans
+            and chord charts.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              onSaveApiKeyAndSync(apiKeyDraft.trim());
+            }}
+            className="flex flex-col sm:flex-row gap-2"
+          >
+            <div className="relative flex-1">
+              <Input
+                type={showApiKey ? "text" : "password"}
+                placeholder="cak_your_church_api_key_here..."
+                value={apiKeyDraft}
+                onChange={(e) => setApiKeyDraft(e.target.value)}
+                className="pr-10 font-mono text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                title={showApiKey ? "Hide API Key" : "Show API Key"}
+              >
+                {showApiKey ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+            <Button type="submit" className="gap-2 shrink-0">
+              <RefreshCw className="h-4 w-4" />
+              Save & Sync B1
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* 1. Chill Pastel Theme & Chord Color Studio */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Palette className="h-4 w-4 text-primary" />
+              <CardTitle className="text-base">
+                Pastel Stage Palette & Chord Colors
+              </CardTitle>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant={config.darkMode ? "default" : "outline"}
+                onClick={() => onChangeConfig({ ...config, darkMode: true })}
+                className="gap-1.5 h-8"
+              >
+                <Moon className="h-3.5 w-3.5" />
+                Dark
+              </Button>
+              <Button
+                size="sm"
+                variant={!config.darkMode ? "default" : "outline"}
+                onClick={() => onChangeConfig({ ...config, darkMode: false })}
+                className="gap-1.5 h-8"
+              >
+                <Sun className="h-3.5 w-3.5" />
+                Light
+              </Button>
+            </div>
+          </div>
+          <CardDescription>
+            Mix and match soft pastel colors for your app's UI accent and your
+            chord symbols.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Accent Color Palette */}
+          <div className="space-y-2.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              UI Accent
+            </label>
+            <div className="flex flex-wrap pt-2 items-center gap-3">
+              {PASTEL_PRESETS.map((preset) => {
+                const isSelected =
+                  (config.accentColor || "lavender") === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() =>
+                      onChangeConfig({
+                        ...config,
+                        accentColor: preset.id as PastelColorId,
+                      })
+                    }
+                    style={{ backgroundColor: preset.swatch }}
+                    className={`h-9 w-9 rounded-full flex items-center justify-center transition-all ${
+                      isSelected
+                        ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110 shadow-sm"
+                        : "opacity-80 hover:opacity-100 hover:scale-105 border border-black/15"
+                    }`}
+                  >
+                    {isSelected && (
+                      <Check className="h-4 w-4 text-zinc-900 stroke-[3]" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Chord Color Palette */}
+          <div className="space-y-2.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Chords
+            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              {PASTEL_PRESETS.map((preset) => {
+                const isSelected = (config.chordColor || "peach") === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() =>
+                      onChangeConfig({
+                        ...config,
+                        chordColor: preset.id as PastelColorId,
+                      })
+                    }
+                    style={{ backgroundColor: preset.swatch }}
+                    className={`h-9 w-9 rounded-full flex items-center justify-center transition-all ${
+                      isSelected
+                        ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110 shadow-sm"
+                        : "opacity-80 hover:opacity-100 hover:scale-105 border border-black/15"
+                    }`}
+                  >
+                    {isSelected && (
+                      <Check className="h-4 w-4 text-zinc-900 stroke-[3]" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Live Mini Preview */}
+          <div className="rounded-xl border border-border bg-card/90 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="font-mono text-sm leading-tight">
+              <div className="flex flex-wrap items-end">
+                <span className="inline-flex flex-col mr-2">
+                  <span
+                    className="font-bold"
+                    style={{ color: "var(--chord-color)" }}
+                  >
+                    {config.notation === "chords"
+                      ? "Am "
+                      : config.notation === "roman"
+                        ? "vi "
+                        : "6m "}
+                  </span>
+                  <span>The King of Glory, </span>
+                </span>
+                <span className="inline-flex flex-col mr-2">
+                  <span
+                    className="font-bold"
+                    style={{ color: "var(--chord-color)" }}
+                  >
+                    {config.notation === "chords"
+                      ? "G "
+                      : config.notation === "roman"
+                        ? "V "
+                        : "5 "}
+                  </span>
+                  <span>the King above all kings </span>
+                </span>
+                <span className="inline-flex flex-col">
+                  <span
+                    className="font-bold"
+                    style={{ color: "var(--chord-color)" }}
+                  >
+                    {config.notation === "chords"
+                      ? "Fmaj7 "
+                      : config.notation === "roman"
+                        ? "IVmaj7 "
+                        : "4maj7 "}
+                  </span>
+                  <span>ㅤ</span>
+                </span>
+              </div>
+            </div>
+            <Badge className="self-start sm:self-center shrink-0">
+              Active Accent Preview
+            </Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 2. Chord Notation System */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -80,7 +311,8 @@ export default function ConfigView({ config, onChangeConfig }: Props) {
             <CardTitle className="text-base">Chord Notation System</CardTitle>
           </div>
           <CardDescription>
-            B1 stores charts in Nashville numbers by default. Choose how your screen renders them.
+            B1 stores charts in Nashville numbers by default. Choose how your
+            screen renders them.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -104,7 +336,12 @@ export default function ConfigView({ config, onChangeConfig }: Props) {
                 sample: "I · IV · V · vi",
                 desc: "Classical harmonic analysis with lowercase minor chords.",
               },
-            ] as { id: NotationMode; title: string; sample: string; desc: string }[]
+            ] as {
+              id: NotationMode;
+              title: string;
+              sample: string;
+              desc: string;
+            }[]
           ).map((opt) => {
             const active = config.notation === opt.id;
             return (
@@ -118,10 +355,11 @@ export default function ConfigView({ config, onChangeConfig }: Props) {
                 }`}
               >
                 <div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-sm">{opt.title}</span>
-                  </div>
-                  <p className="font-mono text-xs text-primary font-bold mt-1.5">
+                  <span className="font-semibold text-sm">{opt.title}</span>
+                  <p
+                    className="font-mono text-xs font-bold mt-1.5"
+                    style={{ color: "var(--chord-color)" }}
+                  >
                     {opt.sample}
                   </p>
                   <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
@@ -134,7 +372,7 @@ export default function ConfigView({ config, onChangeConfig }: Props) {
         </CardContent>
       </Card>
 
-      {/* 2. Chart Layout & Columns */}
+      {/* 3. Stage Layout Mode */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -163,9 +401,9 @@ export default function ConfigView({ config, onChangeConfig }: Props) {
                 },
                 {
                   id: "blocks",
-                  title: "Flexbox Section Cards",
+                  title: "Deduplicated Section Cards",
                   icon: LayoutGrid,
-                  desc: "Wraps Verso, Coro, and Puente into responsive cards.",
+                  desc: "Wraps unique Verso, Coro, and Puente sections into responsive cards.",
                 },
               ] as { id: LayoutMode; title: string; icon: any; desc: string }[]
             ).map((opt) => {
@@ -181,9 +419,11 @@ export default function ConfigView({ config, onChangeConfig }: Props) {
                       : "border-border hover:bg-accent/50"
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <Icon className="h-4 w-4 text-primary" />
-                    <span className="font-semibold text-sm">{opt.title}</span>
+                  <div className="flex items-start gap-2.5">
+                    <Icon className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                    <span className="font-semibold text-sm leading-5">
+                      {opt.title}
+                    </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
                     {opt.desc}
@@ -226,7 +466,7 @@ export default function ConfigView({ config, onChangeConfig }: Props) {
         </CardContent>
       </Card>
 
-      {/* 3. Section Header Keywords */}
+      {/* 4. Song Section Headers */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -234,7 +474,8 @@ export default function ConfigView({ config, onChangeConfig }: Props) {
             <CardTitle className="text-base">Song Section Headers</CardTitle>
           </div>
           <CardDescription>
-            Bracketed lines matching these keywords (like [Coro] or [Verso 1]) split your song into visual blocks.
+            Bracketed lines matching these keywords (like [Coro] or [Verso 1])
+            split your song into visual blocks.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -261,55 +502,18 @@ export default function ConfigView({ config, onChangeConfig }: Props) {
               <Badge
                 key={kw}
                 variant="secondary"
-                className="pl-2.5 pr-1.5 py-1 text-xs flex items-center gap-1.5"
+                className="pl-3 pr-2 py-1.5 text-sm lg:text-xs flex items-center gap-2"
               >
                 <span>{kw}</span>
                 <button
                   onClick={() => removeSectionKeyword(kw)}
-                  className="rounded-full p-0.5 hover:bg-foreground/15 transition-colors"
+                  className="rounded-full p-1 hover:bg-foreground/15 transition-colors"
                   title={`Remove ${kw}`}
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-4 w-4 lg:h-3 lg:w-3 no-scale" />
                 </button>
               </Badge>
             ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* 4. Appearance & Default Zoom */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <CardTitle className="text-base">Appearance & Stage Readability</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button
-              variant={config.darkMode ? "default" : "outline"}
-              onClick={() => onChangeConfig({ ...config, darkMode: true })}
-              className="gap-2"
-            >
-              <Moon className="h-4 w-4" />
-              Dark Stage Mode
-            </Button>
-            <Button
-              variant={!config.darkMode ? "default" : "outline"}
-              onClick={() => onChangeConfig({ ...config, darkMode: false })}
-              className="gap-2"
-            >
-              <Sun className="h-4 w-4" />
-              Light Paper Mode
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Default Font Size:</span>
-            <Badge variant="outline" className="font-mono">
-              {config.zoom || 16}px
-            </Badge>
           </div>
         </CardContent>
       </Card>

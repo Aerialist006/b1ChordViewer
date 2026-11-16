@@ -1,5 +1,13 @@
-import { useEffect } from "react";
-import { B1ServiceSong, LayoutMode, NotationMode, UserConfig } from "../types";
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  B1ServiceSong,
+  LayoutMode,
+  NotationMode,
+  ParsedBlock,
+  UserConfig,
+} from "../types";
 import {
   isConfiguredSectionHeader,
   splitIntoSectionBlocks,
@@ -19,12 +27,16 @@ import {
   AlignLeft,
   AlertCircle,
   Menu,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 
 interface Props {
   song: B1ServiceSong;
   allSongsInService: B1ServiceSong[];
   config: UserConfig;
+  isFullScreen: boolean;
+  onToggleFullScreen: (next?: boolean) => void;
   onChangeConfig: (next: UserConfig) => void;
   onSelectSong: (song: B1ServiceSong) => void;
   onOpenMobileSidebar?: () => void;
@@ -34,6 +46,8 @@ export default function SongView({
   song,
   allSongsInService,
   config,
+  isFullScreen,
+  onToggleFullScreen,
   onChangeConfig,
   onSelectSong,
   onOpenMobileSidebar,
@@ -43,6 +57,8 @@ export default function SongView({
     config.notation === "chords" && !hasTone ? "nashville" : config.notation;
 
   const zoom = config.zoom || 16;
+  const [blocks, setBlocks] = useState<ParsedBlock[]>([]);
+
   const currentIndex = allSongsInService.findIndex(
     (s) => s.plan_item_id === song.plan_item_id
   );
@@ -52,13 +68,68 @@ export default function SongView({
       ? allSongsInService[currentIndex + 1]
       : null;
 
+  useEffect(() => {
+    const shouldDeduplicate = config.layout === "blocks";
+    invoke<ParsedBlock[]>("parse_and_deduplicate_blocks", {
+      rawChordpro: song.raw_chordpro,
+      sectionKeywords: config.sectionKeywords,
+      deduplicate: shouldDeduplicate,
+    })
+      .then((res) => setBlocks(res))
+      .catch(() => {
+        setBlocks(splitIntoSectionBlocks(song.raw_chordpro, config.sectionKeywords));
+      });
+  }, [song.raw_chordpro, config.sectionKeywords, config.layout]);
+
   function adjustZoom(delta: number) {
     const nextZoom = Math.max(11, Math.min(36, zoom + delta));
     onChangeConfig({ ...config, zoom: nextZoom });
   }
 
+  async function handleFullScreenToggle() {
+    const nextState = !isFullScreen;
+    onToggleFullScreen(nextState);
+
+    // Try native Tauri window fullscreen on Desktop (macOS/Windows)
+    try {
+      const win = getCurrentWindow();
+      await win.setFullscreen(nextState);
+    } catch {
+      // Fallback to standard Fullscreen API if supported
+      try {
+        if (nextState && document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        } else if (!nextState && document.fullscreenElement) {
+          await document.exitFullscreen();
+        }
+      } catch {
+        // Ignore on Android WebView where system safe-area layout handles fullscreen
+      }
+    }
+  }
+
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      // Ignore shortcuts if typing in an input
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "TEXTAREA"
+      ) {
+        return;
+      }
+
+      if (e.key === "Escape" && isFullScreen) {
+        e.preventDefault();
+        handleFullScreenToggle();
+        return;
+      }
+
+      if (e.key.toLowerCase() === "f" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        handleFullScreenToggle();
+        return;
+      }
+
       if (e.metaKey || e.ctrlKey) {
         if (e.key === "=" || e.key === "+") {
           e.preventDefault();
@@ -74,7 +145,7 @@ export default function SongView({
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [zoom, config]);
+  }, [zoom, config, isFullScreen]);
 
   function renderLine(line: string, lineIdx: number) {
     const trimmed = line.trim();
@@ -97,7 +168,7 @@ export default function SongView({
     }
 
     const regex = /(?:\[([^\]]+)\])?([^\[]*)/g;
-    const segments: { chord: string; lyric: string }[] = [];
+    const wordTokens: { chord: string; text: string }[] = [];
     let match: RegExpExecArray | null;
 
     while ((match = regex.exec(line)) !== null) {
@@ -106,185 +177,245 @@ export default function SongView({
       const convertedChord = rawBracket
         ? transformChordProToken(rawBracket, effectiveNotation, song.key_signature)
         : "";
+      const lyricChunk = match[2] || "";
 
-      segments.push({
-        chord: convertedChord,
-        lyric: match[2] || "",
+      const wordParts = lyricChunk.match(/\S+\s*|\s+/g) || [""];
+      wordParts.forEach((part, idx) => {
+        wordTokens.push({
+          chord: idx === 0 ? convertedChord : "",
+          text: part,
+        });
       });
     }
 
-    const lineHasAnyChord = segments.some((s) => s.chord !== "");
+    const lineHasAnyChord = wordTokens.some((t) => t.chord !== "");
 
     return (
       <div
         key={lineIdx}
-        className="flex flex-wrap items-end font-mono leading-tight mb-[0.35em]"
+        className="flex flex-wrap items-end font-mono leading-tight mb-[0.35em] max-w-full break-words"
       >
-        {segments.map((seg, i) => (
-          <span key={i} className="inline-flex flex-col whitespace-pre">
+        {wordTokens.map((tok, i) => (
+          <span key={i} className="inline-flex flex-col whitespace-pre-wrap max-w-full">
             {lineHasAnyChord && (
-              <span className="font-bold text-primary min-h-[1.15em] tracking-tight">
-                {seg.chord ? `${seg.chord} ` : " "}
+              <span
+                style={{ color: "var(--chord-color)" }}
+                className="font-bold min-h-[1.15em] tracking-tight"
+              >
+                {tok.chord ? `${tok.chord} ` : ""}
               </span>
             )}
-            <span className="text-foreground/95">{seg.lyric || " "}</span>
+            <span className="text-foreground/95 break-words">{tok.text}</span>
           </span>
         ))}
       </div>
     );
   }
 
-  const blocks = splitIntoSectionBlocks(song.raw_chordpro, config.sectionKeywords);
-
   return (
-    <div className="flex flex-col h-full">
-      {/* Sticky Stage HUD Toolbar (Responsive on Phone, Tablet & Desktop) */}
-      <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2.5 px-3 sm:px-6 py-2.5 border-b border-border bg-background/90 backdrop-blur-md">
-        {/* Left: Mobile Menu Button + Prev/Next + Song Title */}
-        <div className="flex items-center gap-2 min-w-0">
-          {onOpenMobileSidebar && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden shrink-0"
-              onClick={onOpenMobileSidebar}
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-          )}
+    <div className="flex flex-col h-full relative">
+      {/* Sticky Stage HUD Toolbar — Hidden when isFullScreen is active */}
+      {!isFullScreen && (
+        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2.5 px-3 sm:px-6 py-2.5 border-b border-border bg-background/90 backdrop-blur-md">
+          {/* Left: Mobile Menu + Prev/Next + Song Title */}
+          <div className="flex items-center gap-2 min-w-0">
+            {onOpenMobileSidebar && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden h-10 w-10 shrink-0"
+                onClick={onOpenMobileSidebar}
+                title="Open Setlist Menu"
+              >
+                <Menu className="h-6 w-6" />
+              </Button>
+            )}
 
-          <div className="flex items-center gap-1 shrink-0">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              disabled={!prevSong}
-              onClick={() => prevSong && onSelectSong(prevSong)}
-              title={prevSong ? `Previous: ${prevSong.title}` : "First song"}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              disabled={!nextSong}
-              onClick={() => nextSong && onSelectSong(nextSong)}
-              title={nextSong ? `Next: ${nextSong.title}` : "Last song"}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 md:h-8 md:w-8"
+                disabled={!prevSong}
+                onClick={() => prevSong && onSelectSong(prevSong)}
+                title={prevSong ? `Previous: ${prevSong.title}` : "First song"}
+              >
+                <ChevronLeft className="h-5 w-5 md:h-4 md:w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 md:h-8 md:w-8"
+                disabled={!nextSong}
+                onClick={() => nextSong && onSelectSong(nextSong)}
+                title={nextSong ? `Next: ${nextSong.title}` : "Last song"}
+              >
+                <ChevronRight className="h-5 w-5 md:h-4 md:w-4" />
+              </Button>
+            </div>
 
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <h1 className="text-base sm:text-lg font-bold tracking-tight truncate">
-                {song.title}
-              </h1>
-              {hasTone ? (
-                <Badge className="font-mono text-[11px] px-1.5 py-0">
-                  {song.key_signature}
-                </Badge>
-              ) : (
-                <Badge
-                  variant="outline"
-                  className="gap-1 text-[11px] text-amber-500 border-amber-500/40"
-                >
-                  <AlertCircle className="h-3 w-3" />
-                  NNS
-                </Badge>
-              )}
-              {song.bpm && (
-                <Badge
-                  variant="secondary"
-                  className="hidden sm:inline-flex font-mono text-[11px]"
-                >
-                  {song.bpm} BPM
-                </Badge>
-              )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h1 className="text-base sm:text-lg font-bold tracking-tight truncate">
+                  {song.title}
+                </h1>
+                {hasTone ? (
+                  <Badge className="font-mono text-xs px-2 py-0.5">
+                    {song.key_signature}
+                  </Badge>
+                ) : (
+                  <Badge
+                    variant="outline"
+                    className="gap-1 text-xs text-amber-500 border-amber-500/40"
+                  >
+                    <AlertCircle className="h-3.5 w-3.5" />
+                    NNS
+                  </Badge>
+                )}
+                {song.bpm && (
+                  <Badge
+                    variant="secondary"
+                    className="hidden sm:inline-flex font-mono text-xs"
+                  >
+                    {song.bpm} BPM
+                  </Badge>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Right: Notation + Layout + Zoom Controls */}
-        <div className="flex flex-wrap items-center gap-1.5 ml-auto">
-          {/* Notation Switcher */}
-          <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
-            {(["nashville", "chords", "roman"] as NotationMode[]).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => onChangeConfig({ ...config, notation: mode })}
-                className={`px-2 py-1 text-xs font-medium rounded-md capitalize transition-all ${
-                  config.notation === mode
-                    ? "bg-background text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {mode === "nashville" ? "NNS" : mode}
-              </button>
-            ))}
-          </div>
-
-          {/* Layout Switcher */}
-          <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
-            {(
-              [
-                { id: "full", icon: AlignLeft, label: "Full" },
-                { id: "columns", icon: Columns3, label: `${config.columnCount || 2}C` },
-                { id: "blocks", icon: LayoutGrid, label: "Blocks" },
-              ] as { id: LayoutMode; icon: any; label: string }[]
-            ).map((item) => {
-              const Icon = item.icon;
-              return (
+          {/* Right: Notation + Layout + Zoom + Full Screen Button */}
+          <div className="flex flex-wrap items-center gap-1.5 ml-auto">
+            {/* Notation Switcher */}
+            <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
+              {(["nashville", "chords", "roman"] as NotationMode[]).map((mode) => (
                 <button
-                  key={item.id}
-                  onClick={() => onChangeConfig({ ...config, layout: item.id })}
-                  className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-md transition-all ${
-                    config.layout === item.id
+                  key={mode}
+                  onClick={() => onChangeConfig({ ...config, notation: mode })}
+                  className={`px-2.5 py-1.5 md:px-2 md:py-1 text-xs font-medium rounded-md capitalize transition-all ${
+                    config.notation === mode
                       ? "bg-background text-foreground shadow-xs"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  <Icon className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{item.label}</span>
+                  {mode === "nashville" ? "NNS" : mode}
                 </button>
-              );
-            })}
-          </div>
+              ))}
+            </div>
 
-          {/* Zoom Controls */}
-          <div className="flex items-center gap-0.5 rounded-lg border border-border bg-muted/40 px-1 py-0.5">
+            {/* Layout Switcher */}
+            <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
+              {(
+                [
+                  { id: "full", icon: AlignLeft, label: "Full" },
+                  { id: "columns", icon: Columns3, label: `${config.columnCount || 2}C` },
+                  { id: "blocks", icon: LayoutGrid, label: "Blocks" },
+                ] as { id: LayoutMode; icon: any; label: string }[]
+              ).map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => onChangeConfig({ ...config, layout: item.id })}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 md:px-2 md:py-1 text-xs font-medium rounded-md transition-all ${
+                      config.layout === item.id
+                        ? "bg-background text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                    <span className="hidden sm:inline">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Zoom Controls */}
+            <div className="flex items-center gap-0.5 rounded-lg border border-border bg-muted/40 px-1 py-0.5">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 md:h-6 md:w-6"
+                onClick={() => adjustZoom(-2)}
+                title="Zoom Out (Cmd -)"
+              >
+                <ZoomOut className="h-4 w-4 md:h-3.5 md:w-3.5" />
+              </Button>
+              <span className="text-xs font-mono w-9 text-center">{zoom}px</span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 md:h-6 md:w-6"
+                onClick={() => adjustZoom(2)}
+                title="Zoom In (Cmd +)"
+              >
+                <ZoomIn className="h-4 w-4 md:h-3.5 md:w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 md:h-6 md:w-6 hidden sm:inline-flex"
+                onClick={() => onChangeConfig({ ...config, zoom: 16 })}
+                title="Reset Zoom (Cmd 0)"
+              >
+                <RotateCcw className="h-3.5 w-3.5 md:h-3 md:w-3" />
+              </Button>
+            </div>
+
+            {/* Full Screen Chords-Only Toggle Button */}
             <Button
-              variant="ghost"
+              variant="outline"
               size="icon"
-              className="h-6 w-6"
-              onClick={() => adjustZoom(-2)}
-              title="Zoom Out (Cmd -)"
+              className="h-10 w-10 md:h-8 md:w-8"
+              onClick={handleFullScreenToggle}
+              title="Full Screen Chords Only (Press F)"
             >
-              <ZoomOut className="h-3.5 w-3.5" />
-            </Button>
-            <span className="text-[11px] font-mono w-9 text-center">{zoom}px</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={() => adjustZoom(2)}
-              title="Zoom In (Cmd +)"
-            >
-              <ZoomIn className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 hidden sm:inline-flex"
-              onClick={() => onChangeConfig({ ...config, zoom: 16 })}
-              title="Reset Zoom (Cmd 0)"
-            >
-              <RotateCcw className="h-3 w-3" />
+              <Maximize2 className="h-5 w-5 md:h-4 md:w-4" />
             </Button>
           </div>
+        </header>
+      )}
+
+      {/* Floating Controls in Full Screen Mode (Respects System Margins) */}
+      {isFullScreen && (
+        <div
+          className="fixed z-50 flex items-center gap-1.5 rounded-full border border-border/80 bg-background/80 backdrop-blur-md p-1.5 shadow-lg"
+          style={{
+            bottom: "calc(env(safe-area-inset-bottom, 16px) + 16px)",
+            right: "calc(env(safe-area-inset-right, 16px) + 16px)",
+          }}
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 md:h-8 md:w-8 rounded-full"
+            disabled={!prevSong}
+            onClick={() => prevSong && onSelectSong(prevSong)}
+            title="Previous Song"
+          >
+            <ChevronLeft className="h-5 w-5 md:h-4 md:w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 md:h-8 md:w-8 rounded-full"
+            disabled={!nextSong}
+            onClick={() => nextSong && onSelectSong(nextSong)}
+            title="Next Song"
+          >
+            <ChevronRight className="h-5 w-5 md:h-4 md:w-4" />
+          </Button>
+          <Button
+            variant="secondary"
+            size="icon"
+            className="h-10 w-10 md:h-8 md:w-8 rounded-full"
+            onClick={handleFullScreenToggle}
+            title="Exit Full Screen (Esc)"
+          >
+            <Minimize2 className="h-5 w-5 md:h-4 md:w-4" />
+          </Button>
         </div>
-      </header>
+      )}
 
       {/* Main Chord Sheet Canvas */}
       <div
@@ -298,7 +429,7 @@ export default function SongView({
           </div>
         )}
 
-        {/* Layout 2: Multi-Columns (collapses to 1 column on phones automatically) */}
+        {/* Layout 2: Multi-Columns */}
         {config.layout === "columns" && (
           <div
             className="columns-1 md:columns-[var(--col-count)] gap-8"
@@ -322,7 +453,7 @@ export default function SongView({
           </div>
         )}
 
-        {/* Layout 3: Equal-Size Responsive Grid Blocks (Scales with Zoom!) */}
+        {/* Layout 3: Deduplicated, Word-Wrapped Equal-Size Grid Blocks */}
         {config.layout === "blocks" && (
           <div
             className="grid gap-4 items-stretch"
@@ -335,13 +466,13 @@ export default function SongView({
               <Card
                 key={bIdx}
                 style={{ fontSize: `${zoom}px` }}
-                className="py-0 gap-0 overflow-hidden h-full flex flex-col bg-card/70 border-border/80 shadow-xs"
+                className="py-0 gap-0 overflow-hidden h-full min-w-0 flex flex-col bg-card/70 border-border/80 shadow-xs"
               >
                 {block.header && (
                   <CardHeader className="py-2.5 px-4 border-b border-border/60 bg-muted/40 rounded-none">
                     <CardTitle
                       style={{ fontSize: "0.78em" }}
-                      className="font-sans font-bold uppercase tracking-wider text-foreground/90 leading-none"
+                      className="font-sans font-bold uppercase tracking-wider text-foreground/90 leading-none truncate"
                     >
                       {block.header.replace(/^\[|\]$/g, "")}
                     </CardTitle>
@@ -349,7 +480,7 @@ export default function SongView({
                 )}
                 <CardContent
                   style={{ fontSize: `${zoom}px` }}
-                  className="p-4 flex-1 flex flex-col justify-start"
+                  className="p-4 flex-1 min-w-0 flex flex-col justify-start overflow-x-hidden"
                 >
                   {block.lines.map((line, lIdx) => renderLine(line, lIdx))}
                 </CardContent>
