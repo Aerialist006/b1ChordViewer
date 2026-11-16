@@ -6,11 +6,12 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   # JOB 1: Build macOS (.dmg / .app) & Windows (.exe / .msi)
   build-desktop:
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -26,7 +27,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "npm"
 
       - name: Install Rust Stable
@@ -48,8 +49,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           B1_TOKEN: ${{ secrets.B1_TOKEN }}
         with:
-          tagName: v__VERSION__
-          releaseName: "B1 Worship Viewer v__VERSION__"
+          tagName: ${{ github.ref_name || 'v0.1.0' }}
+          releaseName: "B1 Worship Viewer ${{ github.ref_name || 'v0.1.0' }}"
           releaseBody: "Download the installer for macOS (.dmg), Windows (.exe), or Android (.apk) below."
           releaseDraft: false
           prerelease: false
@@ -57,8 +58,6 @@ jobs:
 
   # JOB 2: Build & Sign Android (.apk)
   build-android:
-    permissions:
-      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -66,21 +65,21 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: "npm"
 
-      - name: Setup Java 17 (Required by Gradle/Android SDK)
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Setup Android SDK & NDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android NDK
+      - name: Configure Pre-installed Android SDK & NDK
         run: |
-          sdkmanager --install "ndk;27.0.12077973" "build-tools;34.0.0" "platforms;android-34"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" --install "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;27.0.12077973"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.0.12077973" >> $GITHUB_ENV
 
       - name: Install Rust & Android Targets
@@ -96,30 +95,30 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm install
 
-      - name: Initialize Tauri Android Project (if not already committed)
+      - name: Initialize Tauri Android Project
         run: |
           if [ ! -d "src-tauri/gen/android" ]; then
-            npx tauri android init
+            npx tauri android init --ci
           fi
 
       - name: Build Universal Android APK
         env:
           B1_TOKEN: ${{ secrets.B1_TOKEN }}
-        run: npx tauri android build --apk
+        run: npx tauri android build --apk --ci
 
-      - name: Sign APK for Direct Sideloading on Phones & Tablets
+      - name: Sign APK for Phones & Tablets
         run: |
-          UNSIGNED_APK=$(find src-tauri/gen/android/app/build/outputs/apk/universal/release -name "*-unsigned.apk" | head -n 1)
+          UNSIGNED_APK=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          echo "Found APK: $UNSIGNED_APK"
           SIGNED_APK="b1chordviewer-android-universal.apk"
 
-          # Generate a release keystore if not present and sign with Android build-tools apksigner
           keytool -genkey -v -keystore release.keystore -alias b1worship \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -storepass android123 -keypass android123 \
             -dname "CN=B1Worship, OU=Music, O=Church, L=City, S=State, C=US"
 
-          $ANDROID_HOME/build-tools/34.0.0/zipalign -v -p 4 "$UNSIGNED_APK" aligned.apk
-          $ANDROID_HOME/build-tools/34.0.0/apksigner sign \
+          "$ANDROID_HOME/build-tools/34.0.0/zipalign" -v -p 4 "$UNSIGNED_APK" aligned.apk
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
             --ks release.keystore \
             --ks-key-alias b1worship \
             --ks-pass pass:android123 \
@@ -133,9 +132,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          tag_name: ${{ github.ref_name }}
           files: b1chordviewer-android-universal.apk
 
-      - name: Upload APK as Workflow Artifact (for manual workflow_dispatch runs)
+      - name: Upload APK as Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: b1chordviewer-android-apk
