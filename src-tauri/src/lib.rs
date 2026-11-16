@@ -6,14 +6,13 @@ use std::sync::OnceLock;
 
 const B1_API_BASE: &str = "https://api.churchapps.org";
 
-const B1_API_BASE: &str = "https://api.churchapps.org";
-
 fn get_b1_token() -> &'static str {
     if let Some(tok) = option_env!("B1_TOKEN") {
         if !tok.is_empty() {
             return tok;
         }
     }
+    "cak_your_b1_api_key_here"
 }
 
 static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
