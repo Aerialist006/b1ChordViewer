@@ -99,6 +99,11 @@ jobs:
           if [ ! -d "src-tauri/gen/android" ]; then
             npx tauri android init --ci
           fi
+          # Enforce system bar insets on Android in both portrait & landscape
+          ACTIVITY_XML="src-tauri/gen/android/app/src/main/res/layout/activity_main.xml"
+          if [ -f "$ACTIVITY_XML" ]; then
+            sed -i 's/android:id="@+id\/webview"/android:id="@+id\/webview" android:fitsSystemWindows="true"/g' "$ACTIVITY_XML" || true
+          fi
 
       - name: Build Universal Android APK
         run: npx tauri android build --apk --ci

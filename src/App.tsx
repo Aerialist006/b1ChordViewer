@@ -88,6 +88,22 @@ export default function App() {
     root.style.setProperty("--chord-color", activeChordHex);
   }, [config.darkMode, config.accentColor, config.chordColor]);
 
+  // Reset scroll offset and close mobile drawer on device rotation (portrait <-> landscape)
+  useEffect(() => {
+    function handleOrientationOrResize() {
+      window.scrollTo(0, 0);
+      if (window.innerWidth >= 768) {
+        setMobileMenuOpen(false);
+      }
+    }
+    window.addEventListener("resize", handleOrientationOrResize);
+    window.addEventListener("orientationchange", handleOrientationOrResize);
+    return () => {
+      window.removeEventListener("resize", handleOrientationOrResize);
+      window.removeEventListener("orientationchange", handleOrientationOrResize);
+    };
+  }, []);
+
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
@@ -133,7 +149,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-dvh bg-background text-foreground gap-3">
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-background text-foreground gap-3">
         <Loader2 className="size-7 animate-spin text-primary" />
         <p className="text-sm text-muted-foreground font-medium">
           Syncing service plans & charts from B1.church...
@@ -144,7 +160,7 @@ export default function App() {
 
   if (err || !service) {
     return (
-      <div className="flex flex-col items-center justify-center h-dvh bg-background text-foreground p-4">
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-background text-foreground p-4 overflow-y-auto">
         <Card className="w-full max-w-md shadow-md">
           <CardHeader>
             <div className="flex items-center gap-2.5">
@@ -192,7 +208,7 @@ export default function App() {
 
   return (
     <div
-      className="flex h-dvh w-screen overflow-hidden bg-background text-foreground relative"
+      className="fixed inset-0 flex overflow-hidden bg-background text-foreground"
       style={{
         paddingTop: "env(safe-area-inset-top, 0px)",
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
@@ -250,7 +266,7 @@ export default function App() {
       )}
 
       {/* Active View Area */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto">
         {!hideChrome && activeTab !== "song" && (
           <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border min-h-14 md:hidden bg-background/90 backdrop-blur-md sticky top-0 z-20">
             <div className="flex items-center gap-2.5 min-w-0">
