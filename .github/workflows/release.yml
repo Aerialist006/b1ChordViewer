@@ -47,7 +47,6 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          B1_TOKEN: ${{ secrets.B1_TOKEN }}
         with:
           tagName: ${{ github.ref_name || 'v0.1.0' }}
           releaseName: "B1 Worship Viewer ${{ github.ref_name || 'v0.1.0' }}"
@@ -95,11 +94,6 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm install
 
-      - name: Install System Dependencies & OpenSSL for Android Cross-Compilation
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev build-essential
-
       - name: Initialize Tauri Android Project
         run: |
           if [ ! -d "src-tauri/gen/android" ]; then
@@ -107,8 +101,6 @@ jobs:
           fi
 
       - name: Build Universal Android APK
-        env:
-          B1_TOKEN: ${{ secrets.B1_TOKEN }}
         run: npx tauri android build --apk --ci
 
       - name: Sign APK for Phones & Tablets

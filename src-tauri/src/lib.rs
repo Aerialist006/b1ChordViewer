@@ -22,13 +22,13 @@ fn get_client() -> &'static reqwest::Client {
 
 fn resolve_auth_header(custom_token: Option<&str>) -> Result<HeaderValue, String> {
     let raw = custom_token
-        .filter(|s| !s.trim().is_empty())
-        .or_else(|| option_env!("B1_TOKEN").filter(|s| !s.trim().is_empty()))
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
         .ok_or_else(|| {
-            "No B1 API Key configured. Please enter your Church API Key in Studio Settings.".to_string()
+            "No B1 API Key configured. Please enter your ChurchApps (B1.church) API Key.".to_string()
         })?;
 
-    let clean_token = raw.trim().trim_start_matches("Bearer ").trim();
+    let clean_token = raw.trim_start_matches("Bearer ").trim();
     HeaderValue::from_str(&format!("Bearer {}", clean_token))
         .map_err(|e| format!("Invalid API key format: {}", e))
 }

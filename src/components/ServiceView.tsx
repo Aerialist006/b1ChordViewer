@@ -47,25 +47,27 @@ export default function ServiceView({
     : "Upcoming Service";
 
   return (
-    <div className="max-w-5xl mx-auto p-6 md:p-8 space-y-6">
+    <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-8 space-y-5">
       {/* Service Hero Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Badge variant="secondary" className="gap-1.5 font-mono text-xs">
-              <CalendarDays className="h-3.5 w-3.5" />
+              <CalendarDays className="size-4 lg:size-3.5" />
               {formattedDate}
             </Badge>
             <Badge variant="outline" className="text-xs">
               {service.songs.length} Songs Imported
             </Badge>
           </div>
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight mt-1">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight mt-1">
             {service.active_plan.name}
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Click any song below to open its live chord sheet in{" "}
-            <span className="font-medium text-foreground capitalize">{config.notation}</span>{" "}
+            <span className="font-medium text-foreground capitalize">
+              {config.notation}
+            </span>{" "}
             format.
           </p>
         </div>
@@ -74,21 +76,24 @@ export default function ServiceView({
           <Button
             variant={showServicePicker ? "secondary" : "outline"}
             onClick={() => setShowServicePicker(!showServicePicker)}
-            className="gap-2"
+            className="gap-2 h-10 lg:h-9"
           >
-            <History className="h-4 w-4" />
+            <History className="size-5 lg:size-4" />
             {showServicePicker ? "Close Service Archive" : "Switch Service"}
           </Button>
           {service.songs.length > 0 && (
-            <Button onClick={() => onSelectSong(service.songs[0])} className="gap-1.5">
+            <Button
+              onClick={() => onSelectSong(service.songs[0])}
+              className="gap-1.5 h-10 lg:h-9"
+            >
               Start Setlist
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="size-5 lg:size-4" />
             </Button>
           )}
         </div>
       </div>
 
-      {/* Collapsible Service Archive Drawer (Ordered Recent -> Older) */}
+      {/* Collapsible Service Archive Drawer */}
       {showServicePicker && (
         <Card className="border-primary/30 bg-muted/30">
           <CardHeader className="pb-3">
@@ -100,7 +105,7 @@ export default function ServiceView({
                 </CardDescription>
               </div>
               <div className="relative w-full sm:w-72">
-                <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search by service name or date..."
                   value={searchQuery}
@@ -129,11 +134,17 @@ export default function ServiceView({
                   >
                     <div className="min-w-0 pr-2">
                       <p className="text-xs font-mono text-muted-foreground">
-                        {plan.service_date ? plan.service_date.slice(0, 10) : "No Date"}
+                        {plan.service_date
+                          ? plan.service_date.slice(0, 10)
+                          : "No Date"}
                       </p>
-                      <p className="text-sm truncate font-medium mt-0.5">{plan.name}</p>
+                      <p className="text-sm truncate font-medium mt-0.5">
+                        {plan.name}
+                      </p>
                     </div>
-                    {isActive && <Check className="h-4 w-4 text-primary shrink-0" />}
+                    {isActive && (
+                      <Check className="size-4 text-primary shrink-0" />
+                    )}
                   </button>
                 );
               })}
@@ -143,9 +154,12 @@ export default function ServiceView({
       )}
 
       {/* Setlist Song Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
         {service.songs.map((song, idx) => {
-          const blocks = splitIntoSectionBlocks(song.raw_chordpro, config.sectionKeywords);
+          const blocks = splitIntoSectionBlocks(
+            song.raw_chordpro,
+            config.sectionKeywords
+          );
           const sectionHeaders = blocks
             .map((b) => b.header?.replace(/^\[|\]$/g, ""))
             .filter(Boolean)
@@ -160,7 +174,7 @@ export default function ServiceView({
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-mono text-sm font-bold">
+                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary font-mono text-sm font-bold">
                       {String(idx + 1).padStart(2, "0")}
                     </div>
                     <div className="min-w-0">
@@ -185,7 +199,7 @@ export default function ServiceView({
                     )}
                     {song.bpm && (
                       <Badge variant="secondary" className="font-mono text-xs gap-1">
-                        <Clock className="h-3 w-3" />
+                        <Clock className="size-3" />
                         {song.bpm}
                       </Badge>
                     )}
@@ -206,12 +220,12 @@ export default function ServiceView({
                     ))
                   ) : (
                     <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Music className="h-3 w-3" /> Ready to view
+                      <Music className="size-3.5" /> Ready to view
                     </span>
                   )}
                 </div>
 
-                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 group-hover:text-primary transition-transform shrink-0" />
+                <ChevronRight className="size-5 lg:size-4 text-muted-foreground group-hover:translate-x-0.5 group-hover:text-primary transition-transform shrink-0" />
               </CardContent>
             </Card>
           );

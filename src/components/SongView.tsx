@@ -90,12 +90,10 @@ export default function SongView({
     const nextState = !isFullScreen;
     onToggleFullScreen(nextState);
 
-    // Try native Tauri window fullscreen on Desktop (macOS/Windows)
     try {
       const win = getCurrentWindow();
       await win.setFullscreen(nextState);
     } catch {
-      // Fallback to standard Fullscreen API if supported
       try {
         if (nextState && document.documentElement.requestFullscreen) {
           await document.documentElement.requestFullscreen();
@@ -103,14 +101,13 @@ export default function SongView({
           await document.exitFullscreen();
         }
       } catch {
-        // Ignore on Android WebView where system safe-area layout handles fullscreen
+        // Handled by React layout state on mobile WebViews
       }
     }
   }
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      // Ignore shortcuts if typing in an input
       if (
         document.activeElement?.tagName === "INPUT" ||
         document.activeElement?.tagName === "TEXTAREA"
@@ -202,10 +199,12 @@ export default function SongView({
                 style={{ color: "var(--chord-color)" }}
                 className="font-bold min-h-[1.15em] tracking-tight"
               >
-                {tok.chord ? `${tok.chord} ` : ""}
+                {tok.chord ? `${tok.chord} ` : "\u00A0"}
               </span>
             )}
-            <span className="text-foreground/95 break-words">{tok.text}</span>
+            <span className="text-foreground/95 break-words min-h-[1.15em]">
+              {tok.text || "\u00A0"}
+            </span>
           </span>
         ))}
       </div>
@@ -214,53 +213,53 @@ export default function SongView({
 
   return (
     <div className="flex flex-col h-full relative">
-      {/* Sticky Stage HUD Toolbar — Hidden when isFullScreen is active */}
+      {/* Sticky Stage HUD Toolbar — min-h-14 aligns border with AppSidebar h-14 */}
       {!isFullScreen && (
-        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2.5 px-3 sm:px-6 py-2.5 border-b border-border bg-background/90 backdrop-blur-md">
+        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 px-3 sm:px-5 py-1.5 min-h-14 border-b border-border bg-background/90 backdrop-blur-md">
           {/* Left: Mobile Menu + Prev/Next + Song Title */}
           <div className="flex items-center gap-2 min-w-0">
             {onOpenMobileSidebar && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="md:hidden h-10 w-10 shrink-0"
+                className="md:hidden size-9 shrink-0"
                 onClick={onOpenMobileSidebar}
                 title="Open Setlist Menu"
               >
-                <Menu className="h-6 w-6" />
+                <Menu className="size-5" />
               </Button>
             )}
 
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               <Button
                 variant="outline"
                 size="icon"
-                className="h-10 w-10 md:h-8 md:w-8"
+                className="size-9 lg:size-8"
                 disabled={!prevSong}
                 onClick={() => prevSong && onSelectSong(prevSong)}
                 title={prevSong ? `Previous: ${prevSong.title}` : "First song"}
               >
-                <ChevronLeft className="h-5 w-5 md:h-4 md:w-4" />
+                <ChevronLeft className="size-5 lg:size-4" />
               </Button>
               <Button
                 variant="outline"
                 size="icon"
-                className="h-10 w-10 md:h-8 md:w-8"
+                className="size-9 lg:size-8"
                 disabled={!nextSong}
                 onClick={() => nextSong && onSelectSong(nextSong)}
                 title={nextSong ? `Next: ${nextSong.title}` : "Last song"}
               >
-                <ChevronRight className="h-5 w-5 md:h-4 md:w-4" />
+                <ChevronRight className="size-5 lg:size-4" />
               </Button>
             </div>
 
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <h1 className="text-base sm:text-lg font-bold tracking-tight truncate">
+                <h1 className="text-sm sm:text-base lg:text-lg font-bold tracking-tight truncate">
                   {song.title}
                 </h1>
                 {hasTone ? (
-                  <Badge className="font-mono text-xs px-2 py-0.5">
+                  <Badge className="font-mono text-xs px-2 py-0">
                     {song.key_signature}
                   </Badge>
                 ) : (
@@ -268,7 +267,7 @@ export default function SongView({
                     variant="outline"
                     className="gap-1 text-xs text-amber-500 border-amber-500/40"
                   >
-                    <AlertCircle className="h-3.5 w-3.5" />
+                    <AlertCircle className="size-3.5" />
                     NNS
                   </Badge>
                 )}
@@ -286,13 +285,12 @@ export default function SongView({
 
           {/* Right: Notation + Layout + Zoom + Full Screen Button */}
           <div className="flex flex-wrap items-center gap-1.5 ml-auto">
-            {/* Notation Switcher */}
             <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
               {(["nashville", "chords", "roman"] as NotationMode[]).map((mode) => (
                 <button
                   key={mode}
                   onClick={() => onChangeConfig({ ...config, notation: mode })}
-                  className={`px-2.5 py-1.5 md:px-2 md:py-1 text-xs font-medium rounded-md capitalize transition-all ${
+                  className={`px-2 py-1 text-xs font-medium rounded-md capitalize transition-all ${
                     config.notation === mode
                       ? "bg-background text-foreground shadow-xs"
                       : "text-muted-foreground hover:text-foreground"
@@ -303,7 +301,6 @@ export default function SongView({
               ))}
             </div>
 
-            {/* Layout Switcher */}
             <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
               {(
                 [
@@ -317,128 +314,151 @@ export default function SongView({
                   <button
                     key={item.id}
                     onClick={() => onChangeConfig({ ...config, layout: item.id })}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 md:px-2 md:py-1 text-xs font-medium rounded-md transition-all ${
+                    className={`flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-all ${
                       config.layout === item.id
                         ? "bg-background text-foreground shadow-xs"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    <Icon className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                    <Icon className="size-4 lg:size-3.5" />
                     <span className="hidden sm:inline">{item.label}</span>
                   </button>
                 );
               })}
             </div>
 
-            {/* Zoom Controls */}
             <div className="flex items-center gap-0.5 rounded-lg border border-border bg-muted/40 px-1 py-0.5">
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 md:h-6 md:w-6"
+                className="size-7 lg:size-6"
                 onClick={() => adjustZoom(-2)}
                 title="Zoom Out (Cmd -)"
               >
-                <ZoomOut className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                <ZoomOut className="size-4 lg:size-3.5" />
               </Button>
               <span className="text-xs font-mono w-9 text-center">{zoom}px</span>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 md:h-6 md:w-6"
+                className="size-7 lg:size-6"
                 onClick={() => adjustZoom(2)}
                 title="Zoom In (Cmd +)"
               >
-                <ZoomIn className="h-4 w-4 md:h-3.5 md:w-3.5" />
+                <ZoomIn className="size-4 lg:size-3.5" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 md:h-6 md:w-6 hidden sm:inline-flex"
+                className="size-7 lg:size-6 hidden sm:inline-flex"
                 onClick={() => onChangeConfig({ ...config, zoom: 16 })}
                 title="Reset Zoom (Cmd 0)"
               >
-                <RotateCcw className="h-3.5 w-3.5 md:h-3 md:w-3" />
+                <RotateCcw className="size-3.5 lg:size-3" />
               </Button>
             </div>
 
-            {/* Full Screen Chords-Only Toggle Button */}
             <Button
               variant="outline"
               size="icon"
-              className="h-10 w-10 md:h-8 md:w-8"
+              className="size-9 lg:size-8"
               onClick={handleFullScreenToggle}
               title="Full Screen Chords Only (Press F)"
             >
-              <Maximize2 className="h-5 w-5 md:h-4 md:w-4" />
+              <Maximize2 className="size-5 lg:size-4" />
             </Button>
           </div>
         </header>
       )}
 
-      {/* Floating Controls in Full Screen Mode (Respects System Margins) */}
+      {/* Floating Controls in Full Screen Mode */}
       {isFullScreen && (
         <div
-          className="fixed z-50 flex items-center gap-1.5 rounded-full border border-border/80 bg-background/80 backdrop-blur-md p-1.5 shadow-lg"
+          className="fixed z-50 flex items-center gap-1 rounded-full border border-border/80 bg-background/85 backdrop-blur-md p-1.5 shadow-lg"
           style={{
-            bottom: "calc(env(safe-area-inset-bottom, 16px) + 16px)",
-            right: "calc(env(safe-area-inset-right, 16px) + 16px)",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
+            right: "calc(env(safe-area-inset-right, 0px) + 12px)",
           }}
         >
           <Button
             variant="ghost"
             size="icon"
-            className="h-10 w-10 md:h-8 md:w-8 rounded-full"
+            className="size-9 lg:size-8 rounded-full"
             disabled={!prevSong}
             onClick={() => prevSong && onSelectSong(prevSong)}
             title="Previous Song"
           >
-            <ChevronLeft className="h-5 w-5 md:h-4 md:w-4" />
+            <ChevronLeft className="size-5 lg:size-4" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            className="h-10 w-10 md:h-8 md:w-8 rounded-full"
+            className="size-9 lg:size-8 rounded-full"
             disabled={!nextSong}
             onClick={() => nextSong && onSelectSong(nextSong)}
             title="Next Song"
           >
-            <ChevronRight className="h-5 w-5 md:h-4 md:w-4" />
+            <ChevronRight className="size-5 lg:size-4" />
           </Button>
+
+          <div className="h-5 w-px bg-border mx-0.5" />
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-9 lg:size-8 rounded-full"
+            onClick={() => adjustZoom(-2)}
+            title="Zoom Out (Cmd -)"
+          >
+            <ZoomOut className="size-5 lg:size-4" />
+          </Button>
+          <span className="text-xs font-mono px-1 text-muted-foreground select-none">
+            {zoom}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-9 lg:size-8 rounded-full"
+            onClick={() => adjustZoom(2)}
+            title="Zoom In (Cmd +)"
+          >
+            <ZoomIn className="size-5 lg:size-4" />
+          </Button>
+
+          <div className="h-5 w-px bg-border mx-0.5" />
+
           <Button
             variant="secondary"
             size="icon"
-            className="h-10 w-10 md:h-8 md:w-8 rounded-full"
+            className="size-9 lg:size-8 rounded-full"
             onClick={handleFullScreenToggle}
             title="Exit Full Screen (Esc)"
           >
-            <Minimize2 className="h-5 w-5 md:h-4 md:w-4" />
+            <Minimize2 className="size-5 lg:size-4" />
           </Button>
         </div>
       )}
 
-      {/* Main Chord Sheet Canvas */}
+      {/* Main Chord Sheet Canvas — Compact p-3 on mobile/tablet so cards fit comfortably */}
       <div
-        className="flex-1 p-4 sm:p-6 md:p-8 overflow-y-auto"
+        className="flex-1 p-3 sm:p-4 lg:p-6 overflow-y-auto"
         style={{ fontSize: `${zoom}px` }}
       >
-        {/* Layout 1: Full Song */}
         {config.layout === "full" && (
           <div className="max-w-4xl mx-auto">
             {song.raw_chordpro.split(/\r?\n/).map((line, idx) => renderLine(line, idx))}
           </div>
         )}
 
-        {/* Layout 2: Multi-Columns */}
         {config.layout === "columns" && (
           <div
-            className="columns-1 md:columns-[var(--col-count)] gap-8"
+            className="columns-1 md:columns-[var(--col-count)] gap-6"
             style={{ "--col-count": config.columnCount || 2 } as React.CSSProperties}
           >
             {blocks.map((block, bIdx) => (
-              <div key={bIdx} className="break-inside-avoid mb-5">
+              <div key={bIdx} className="break-inside-avoid mb-4">
                 {block.header && (
-                  <div className="mb-2">
+                  <div className="mb-1.5">
                     <Badge
                       variant="secondary"
                       className="font-sans font-semibold uppercase tracking-wider text-[0.75em] px-2.5 py-0.5"
@@ -453,13 +473,12 @@ export default function SongView({
           </div>
         )}
 
-        {/* Layout 3: Deduplicated, Word-Wrapped Equal-Size Grid Blocks */}
         {config.layout === "blocks" && (
           <div
-            className="grid gap-4 items-stretch"
+            className="grid gap-3 sm:gap-4 items-stretch"
             style={{
               fontSize: `${zoom}px`,
-              gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 19em), 1fr))",
+              gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 18em), 1fr))",
             }}
           >
             {blocks.map((block, bIdx) => (
@@ -469,7 +488,7 @@ export default function SongView({
                 className="py-0 gap-0 overflow-hidden h-full min-w-0 flex flex-col bg-card/70 border-border/80 shadow-xs"
               >
                 {block.header && (
-                  <CardHeader className="py-2.5 px-4 border-b border-border/60 bg-muted/40 rounded-none">
+                  <CardHeader className="py-2 px-3.5 border-b border-border/60 bg-muted/40 rounded-none">
                     <CardTitle
                       style={{ fontSize: "0.78em" }}
                       className="font-sans font-bold uppercase tracking-wider text-foreground/90 leading-none truncate"
@@ -480,7 +499,7 @@ export default function SongView({
                 )}
                 <CardContent
                   style={{ fontSize: `${zoom}px` }}
-                  className="p-4 flex-1 min-w-0 flex flex-col justify-start overflow-x-hidden"
+                  className="p-3.5 flex-1 min-w-0 flex flex-col justify-start overflow-x-hidden"
                 >
                   {block.lines.map((line, lIdx) => renderLine(line, lIdx))}
                 </CardContent>

@@ -82,12 +82,12 @@ export default function ConfigView({
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-6 md:p-8 space-y-6">
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 md:p-8 space-y-5">
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+        <h1 className="text-xl md:text-3xl font-bold tracking-tight">
           Studio Settings
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
+        <p className="text-xs sm:text-sm text-muted-foreground mt-1">
           Configure your church's B1 API connection, pastel stage palette, and
           chord layout.
         </p>
@@ -96,8 +96,8 @@ export default function ConfigView({
       {/* 0. ChurchApps (B1) API Key Configuration */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <KeyRound className="h-4 w-4 text-primary" />
+          <div className="flex items-center gap-2.5">
+            <KeyRound className="size-5 lg:size-4 text-primary shrink-0" />
             <CardTitle className="text-base">
               ChurchApps (B1.church) API Key
             </CardTitle>
@@ -122,7 +122,7 @@ export default function ConfigView({
                 placeholder="cak_your_church_api_key_here..."
                 value={apiKeyDraft}
                 onChange={(e) => setApiKeyDraft(e.target.value)}
-                className="pr-10 font-mono text-xs"
+                className="pr-10 font-mono text-xs h-10 lg:h-9"
               />
               <button
                 type="button"
@@ -131,14 +131,14 @@ export default function ConfigView({
                 title={showApiKey ? "Hide API Key" : "Show API Key"}
               >
                 {showApiKey ? (
-                  <EyeOff className="h-4 w-4" />
+                  <EyeOff className="size-5 lg:size-4" />
                 ) : (
-                  <Eye className="h-4 w-4" />
+                  <Eye className="size-5 lg:size-4" />
                 )}
               </button>
             </div>
-            <Button type="submit" className="gap-2 shrink-0">
-              <RefreshCw className="h-4 w-4" />
+            <Button type="submit" className="gap-2 shrink-0 h-10 lg:h-9">
+              <RefreshCw className="size-5 lg:size-4" />
               Save & Sync B1
             </Button>
           </form>
@@ -149,8 +149,8 @@ export default function ConfigView({
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <Palette className="h-4 w-4 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <Palette className="size-5 lg:size-4 text-primary shrink-0" />
               <CardTitle className="text-base">
                 Pastel Stage Palette & Chord Colors
               </CardTitle>
@@ -160,18 +160,18 @@ export default function ConfigView({
                 size="sm"
                 variant={config.darkMode ? "default" : "outline"}
                 onClick={() => onChangeConfig({ ...config, darkMode: true })}
-                className="gap-1.5 h-8"
+                className="gap-1.5 h-9 lg:h-8"
               >
-                <Moon className="h-3.5 w-3.5" />
+                <Moon className="size-4 lg:size-3.5" />
                 Dark
               </Button>
               <Button
                 size="sm"
                 variant={!config.darkMode ? "default" : "outline"}
                 onClick={() => onChangeConfig({ ...config, darkMode: false })}
-                className="gap-1.5 h-8"
+                className="gap-1.5 h-9 lg:h-8"
               >
-                <Sun className="h-3.5 w-3.5" />
+                <Sun className="size-4 lg:size-3.5" />
                 Light
               </Button>
             </div>
@@ -181,13 +181,13 @@ export default function ConfigView({
             chord symbols.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-5">
           {/* Accent Color Palette */}
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               UI Accent
             </label>
-            <div className="flex flex-wrap pt-2 items-center gap-3">
+            <div className="flex flex-wrap pt-1 items-center gap-3">
               {PASTEL_PRESETS.map((preset) => {
                 const isSelected =
                   (config.accentColor || "lavender") === preset.id;
@@ -202,14 +202,14 @@ export default function ConfigView({
                       })
                     }
                     style={{ backgroundColor: preset.swatch }}
-                    className={`h-9 w-9 rounded-full flex items-center justify-center transition-all ${
+                    className={`size-9 rounded-full flex items-center justify-center transition-all ${
                       isSelected
                         ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110 shadow-sm"
                         : "opacity-80 hover:opacity-100 hover:scale-105 border border-black/15"
                     }`}
                   >
                     {isSelected && (
-                      <Check className="h-4 w-4 text-zinc-900 stroke-[3]" />
+                      <Check className="size-4 text-zinc-900 stroke-[3]" />
                     )}
                   </button>
                 );
@@ -218,11 +218,11 @@ export default function ConfigView({
           </div>
 
           {/* Chord Color Palette */}
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Chords
             </label>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap pt-1 items-center gap-3">
               {PASTEL_PRESETS.map((preset) => {
                 const isSelected = (config.chordColor || "peach") === preset.id;
                 return (
@@ -236,14 +236,14 @@ export default function ConfigView({
                       })
                     }
                     style={{ backgroundColor: preset.swatch }}
-                    className={`h-9 w-9 rounded-full flex items-center justify-center transition-all ${
+                    className={`size-9 rounded-full flex items-center justify-center transition-all ${
                       isSelected
                         ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110 shadow-sm"
                         : "opacity-80 hover:opacity-100 hover:scale-105 border border-black/15"
                     }`}
                   >
                     {isSelected && (
-                      <Check className="h-4 w-4 text-zinc-900 stroke-[3]" />
+                      <Check className="size-4 text-zinc-900 stroke-[3]" />
                     )}
                   </button>
                 );
@@ -252,7 +252,7 @@ export default function ConfigView({
           </div>
 
           {/* Live Mini Preview */}
-          <div className="rounded-xl border border-border bg-card/90 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="rounded-xl border border-border bg-card/90 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="font-mono text-sm leading-tight">
               <div className="flex flex-wrap items-end">
                 <span className="inline-flex flex-col mr-2">
@@ -292,7 +292,7 @@ export default function ConfigView({
                         ? "IVmaj7 "
                         : "4maj7 "}
                   </span>
-                  <span>ㅤ</span>
+                  <span>{"\u00A0"}</span>
                 </span>
               </div>
             </div>
@@ -306,8 +306,8 @@ export default function ConfigView({
       {/* 2. Chord Notation System */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <Music className="h-4 w-4 text-primary" />
+          <div className="flex items-center gap-2.5">
+            <Music className="size-5 lg:size-4 text-primary shrink-0" />
             <CardTitle className="text-base">Chord Notation System</CardTitle>
           </div>
           <CardDescription>
@@ -348,7 +348,7 @@ export default function ConfigView({
               <button
                 key={opt.id}
                 onClick={() => setNotation(opt.id)}
-                className={`flex flex-col justify-between p-4 rounded-xl border text-left transition-all ${
+                className={`flex flex-col justify-between p-3.5 rounded-xl border text-left transition-all ${
                   active
                     ? "border-primary bg-primary/10 ring-1 ring-primary"
                     : "border-border hover:bg-accent/50"
@@ -375,8 +375,8 @@ export default function ConfigView({
       {/* 3. Stage Layout Mode */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <LayoutGrid className="h-4 w-4 text-primary" />
+          <div className="flex items-center gap-2.5">
+            <LayoutGrid className="size-5 lg:size-4 text-primary shrink-0" />
             <CardTitle className="text-base">Stage Layout Mode</CardTitle>
           </div>
           <CardDescription>
@@ -413,14 +413,14 @@ export default function ConfigView({
                 <button
                   key={opt.id}
                   onClick={() => setLayout(opt.id)}
-                  className={`flex flex-col p-4 rounded-xl border text-left transition-all ${
+                  className={`flex flex-col p-3.5 rounded-xl border text-left transition-all ${
                     active
                       ? "border-primary bg-primary/10 ring-1 ring-primary"
                       : "border-border hover:bg-accent/50"
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
-                    <Icon className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                    <Icon className="size-5 lg:size-4 text-primary shrink-0 mt-0.5" />
                     <span className="font-semibold text-sm leading-5">
                       {opt.title}
                     </span>
@@ -469,8 +469,8 @@ export default function ConfigView({
       {/* 4. Song Section Headers */}
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-2">
-            <Tags className="h-4 w-4 text-primary" />
+          <div className="flex items-center gap-2.5">
+            <Tags className="size-5 lg:size-4 text-primary shrink-0" />
             <CardTitle className="text-base">Song Section Headers</CardTitle>
           </div>
           <CardDescription>
@@ -490,9 +490,10 @@ export default function ConfigView({
               placeholder="Add custom section header (e.g. Estribillo, Interludio, Espontáneo)..."
               value={newSectionInput}
               onChange={(e) => setNewSectionInput(e.target.value)}
+              className="h-10 lg:h-9"
             />
-            <Button type="submit" className="gap-1.5 shrink-0">
-              <Plus className="h-4 w-4" />
+            <Button type="submit" className="gap-1.5 shrink-0 h-10 lg:h-9">
+              <Plus className="size-5 lg:size-4" />
               Add Section
             </Button>
           </form>
@@ -510,7 +511,7 @@ export default function ConfigView({
                   className="rounded-full p-1 hover:bg-foreground/15 transition-colors"
                   title={`Remove ${kw}`}
                 >
-                  <X className="h-4 w-4 lg:h-3 lg:w-3 no-scale" />
+                  <X className="size-4 lg:size-3 no-scale" />
                 </button>
               </Badge>
             ))}

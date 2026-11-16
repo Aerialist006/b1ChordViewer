@@ -61,7 +61,6 @@ export default function App() {
 
   const [onboardingKey, setOnboardingKey] = useState(config.apiKey || "");
 
-  // Sync Tailwind .dark class AND dynamic Pastel Theme CSS variables on <html>
   useEffect(() => {
     const root = document.documentElement;
     if (config.darkMode) {
@@ -89,7 +88,6 @@ export default function App() {
     root.style.setProperty("--chord-color", activeChordHex);
   }, [config.darkMode, config.accentColor, config.chordColor]);
 
-  // Cmd + B shortcut to collapse/expand sidebar
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
@@ -136,7 +134,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-dvh bg-background text-foreground gap-3">
-        <Loader2 className="h-7 w-7 animate-spin text-primary" />
+        <Loader2 className="size-7 animate-spin text-primary" />
         <p className="text-sm text-muted-foreground font-medium">
           Syncing service plans & charts from B1.church...
         </p>
@@ -146,11 +144,11 @@ export default function App() {
 
   if (err || !service) {
     return (
-      <div className="flex flex-col items-center justify-center h-dvh bg-background text-foreground p-6">
+      <div className="flex flex-col items-center justify-center h-dvh bg-background text-foreground p-4">
         <Card className="w-full max-w-md shadow-md">
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <KeyRound className="h-5 w-5 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <KeyRound className="size-5 text-primary shrink-0" />
               <CardTitle className="text-lg">Connect Your Church B1 API</CardTitle>
             </div>
             <CardDescription>
@@ -177,14 +175,12 @@ export default function App() {
                 placeholder="cak_your_church_api_key_here..."
                 value={onboardingKey}
                 onChange={(e) => setOnboardingKey(e.target.value)}
-                className="font-mono text-xs"
+                className="font-mono text-xs h-10"
               />
-              <div className="flex gap-2">
-                <Button type="submit" className="w-full gap-2">
-                  <RefreshCw className="h-4 w-4" />
-                  Save Key & Connect
-                </Button>
-              </div>
+              <Button type="submit" className="w-full h-10 gap-2">
+                <RefreshCw className="size-4" />
+                Save Key & Connect
+              </Button>
             </form>
           </CardContent>
         </Card>
@@ -192,14 +188,14 @@ export default function App() {
     );
   }
 
-const hideChrome = isFullScreen && activeTab === "song";
+  const hideChrome = isFullScreen && activeTab === "song";
 
   return (
     <div
       className="flex h-dvh w-screen overflow-hidden bg-background text-foreground relative"
       style={{
-        paddingTop: "env(safe-area-inset-top, 24px)",
-        paddingBottom: "env(safe-area-inset-bottom, 16px)",
+        paddingTop: "env(safe-area-inset-top, 0px)",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
         paddingLeft: "env(safe-area-inset-left, 0px)",
         paddingRight: "env(safe-area-inset-right, 0px)",
       }}
@@ -212,15 +208,16 @@ const hideChrome = isFullScreen && activeTab === "song";
         />
       )}
 
-      {/* Sidebar — Hidden when Full Screen Chords Mode is active */}
+      {/* Sidebar */}
       {!hideChrome && (
         <div
           className={`fixed inset-y-0 left-0 z-40 flex md:static md:z-auto transition-transform duration-200 ${
             mobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
           }`}
           style={{
-            paddingTop: "env(safe-area-inset-top, 24px)",
-            paddingBottom: "env(safe-area-inset-bottom, 16px)",
+            paddingTop: "env(safe-area-inset-top, 0px)",
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+            paddingLeft: "env(safe-area-inset-left, 0px)",
           }}
         >
           <AppSidebar
@@ -255,16 +252,16 @@ const hideChrome = isFullScreen && activeTab === "song";
       {/* Active View Area */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         {!hideChrome && activeTab !== "song" && (
-          <div className="flex items-center justify-between gap-2.5 px-4 py-2.5 border-b border-border md:hidden bg-background/90 backdrop-blur-md sticky top-0 z-20">
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border min-h-14 md:hidden bg-background/90 backdrop-blur-md sticky top-0 z-20">
             <div className="flex items-center gap-2.5 min-w-0">
               <Button
                 variant="outline"
                 size="icon"
-                className="h-11 w-11 shrink-0"
+                className="size-10 shrink-0"
                 onClick={() => setMobileMenuOpen(true)}
                 title="Open Menu & Setlist"
               >
-                <Menu className="h-6 w-6" />
+                <Menu className="size-5" />
               </Button>
               <span className="text-base font-bold truncate">
                 {activeTab === "config" ? "Studio Settings" : service.active_plan.name}
@@ -274,13 +271,13 @@ const hideChrome = isFullScreen && activeTab === "song";
             <Button
               variant={activeTab === "config" ? "secondary" : "ghost"}
               size="icon"
-              className="h-11 w-11 shrink-0"
+              className="size-10 shrink-0"
               onClick={() =>
                 setActiveTab(activeTab === "config" ? "service" : "config")
               }
               title="Toggle Settings"
             >
-              <Settings className="h-6 w-6" />
+              <Settings className="size-5" />
             </Button>
           </div>
         )}
