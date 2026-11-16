@@ -44,12 +44,17 @@ const DEFAULT_CONFIG: UserConfig = {
   ],
 };
 
+function checkIsPhoneViewport() {
+  return window.innerWidth < 768 || window.innerHeight < 520;
+}
+
 export default function App() {
   const [service, setService] = useState<B1ServicePayload | null>(null);
   const [selectedSong, setSelectedSong] = useState<B1ServiceSong | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("service");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isPhone, setIsPhone] = useState(checkIsPhoneViewport);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -88,11 +93,12 @@ export default function App() {
     root.style.setProperty("--chord-color", activeChordHex);
   }, [config.darkMode, config.accentColor, config.chordColor]);
 
-  // Reset scroll offset and close mobile drawer on device rotation (portrait <-> landscape)
   useEffect(() => {
     function handleOrientationOrResize() {
       window.scrollTo(0, 0);
-      if (window.innerWidth >= 768) {
+      const phoneNow = checkIsPhoneViewport();
+      setIsPhone(phoneNow);
+      if (!phoneNow) {
         setMobileMenuOpen(false);
       }
     }
@@ -207,43 +213,34 @@ export default function App() {
   const hideChrome = isFullScreen && activeTab === "song";
 
   return (
-    <div
-      className="fixed inset-0 flex overflow-hidden bg-background text-foreground"
-      style={{
-        paddingTop: "env(safe-area-inset-top, 0px)",
-        paddingBottom: "env(safe-area-inset-bottom, 0px)",
-        paddingLeft: "env(safe-area-inset-left, 0px)",
-        paddingRight: "env(safe-area-inset-right, 0px)",
-      }}
-    >
-      {/* Mobile Backdrop Overlay */}
-      {!hideChrome && mobileMenuOpen && (
+    <div className="fixed inset-0 flex overflow-hidden bg-background text-foreground">
+      {/* Mobile / Phone-Landscape Backdrop Overlay */}
+      {!hideChrome && isPhone && mobileMenuOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-xs md:hidden"
+          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-xs"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar: Slide-over drawer on phones (portrait & landscape), docked on tablets/desktop */}
       {!hideChrome && (
         <div
-          className={`fixed inset-y-0 left-0 z-40 flex md:static md:z-auto transition-transform duration-200 ${
-            mobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-          }`}
-          style={{
-            paddingTop: "env(safe-area-inset-top, 0px)",
-            paddingBottom: "env(safe-area-inset-bottom, 0px)",
-            paddingLeft: "env(safe-area-inset-left, 0px)",
-          }}
+          className={
+            isPhone
+              ? `fixed inset-y-0 left-0 z-40 flex transition-transform duration-200 ${
+                  mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+                }`
+              : "static flex shrink-0"
+          }
         >
           <AppSidebar
             service={service}
             selectedSong={selectedSong}
             activeTab={activeTab}
-            collapsed={sidebarCollapsed}
+            collapsed={isPhone ? false : sidebarCollapsed}
             config={config}
             onToggleCollapse={() => {
-              if (window.innerWidth < 768) {
+              if (isPhone) {
                 setMobileMenuOpen(false);
               } else {
                 setSidebarCollapsed(!sidebarCollapsed);
@@ -267,8 +264,8 @@ export default function App() {
 
       {/* Active View Area */}
       <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto">
-        {!hideChrome && activeTab !== "song" && (
-          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border min-h-14 md:hidden bg-background/90 backdrop-blur-md sticky top-0 z-20">
+        {!hideChrome && isPhone && activeTab !== "song" && (
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border min-h-14 bg-background/90 backdrop-blur-md sticky top-0 z-20">
             <div className="flex items-center gap-2.5 min-w-0">
               <Button
                 variant="outline"
@@ -320,7 +317,7 @@ export default function App() {
             }
             onChangeConfig={handleUpdateConfig}
             onSelectSong={(s) => setSelectedSong(s)}
-            onOpenMobileSidebar={() => setMobileMenuOpen(true)}
+            onOpenMobileSidebar={isPhone ? () => setMobileMenuOpen(true) : undefined}
           />
         )}
 

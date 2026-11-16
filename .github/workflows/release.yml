@@ -94,15 +94,40 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm install
 
-      - name: Initialize Tauri Android Project
+      - name: Initialize & Patch Android Project for Edge-to-Edge / Landscape Cutouts
         run: |
           if [ ! -d "src-tauri/gen/android" ]; then
             npx tauri android init --ci
           fi
-          # Enforce system bar insets on Android in both portrait & landscape
-          ACTIVITY_XML="src-tauri/gen/android/app/src/main/res/layout/activity_main.xml"
-          if [ -f "$ACTIVITY_XML" ]; then
-            sed -i 's/android:id="@+id\/webview"/android:id="@+id\/webview" android:fitsSystemWindows="true"/g' "$ACTIVITY_XML" || true
+
+          MAIN_ACT=$(find src-tauri/gen/android/app/src/main/java -name "MainActivity.kt" | head -n 1)
+          if [ -n "$MAIN_ACT" ]; then
+            PKG_LINE=$(head -n 1 "$MAIN_ACT")
+            cat << EOF > "$MAIN_ACT"
+          $PKG_LINE
+
+          import android.os.Bundle
+          import android.view.View
+          import androidx.core.view.ViewCompat
+          import androidx.core.view.WindowCompat
+          import androidx.core.view.WindowInsetsCompat
+
+          class MainActivity : TauriActivity() {
+            override fun onCreate(savedInstanceState: Bundle?) {
+              super.onCreate(savedInstanceState)
+              WindowCompat.setDecorFitsSystemWindows(window, false)
+              val rootView = findViewById<View>(android.R.id.content)
+              ViewCompat.setOnApplyWindowInsetsListener(rootView) { view, windowInsets ->
+                val insets = windowInsets.getInsets(
+                  WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+                )
+                view.setPadding(insets.left, insets.top, insets.right, insets.bottom)
+                WindowInsetsCompat.CONSUMED
+              }
+            }
+          }
+          EOF
+            echo "Patched $MAIN_ACT successfully"
           fi
 
       - name: Build Universal Android APK
