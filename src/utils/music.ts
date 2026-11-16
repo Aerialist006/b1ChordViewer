@@ -1,174 +1,147 @@
-import { NotationMode, ParsedBlock } from "../types";
+import { NotationMode } from "../types";
 
-const NOTE_TO_SEMITONE: Record<string, number> = {
-  C: 0, "B#": 0,
-  "C#": 1, Db: 1,
-  D: 2,
-  "D#": 3, Eb: 3,
-  E: 4, Fb: 4,
-  F: 5, "E#": 5,
-  "F#": 6, Gb: 6,
-  G: 7,
-  "G#": 8, Ab: 8,
-  A: 9,
-  "A#": 10, Bb: 10,
-  B: 11, Cb: 11,
+const NASHVILLE_MAP: Record<string, string> = {
+  "1": "C", "1#": "C#", "2b": "Db", "2": "D", "2#": "D#", "3b": "Eb",
+  "3": "E", "4": "F", "4#": "F#", "5b": "Gb", "5": "G", "5#": "G#",
+  "6b": "Ab", "6": "A", "6#": "A#", "7b": "Bb", "7": "B",
 };
 
-const SEMITONE_TO_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-const SEMITONE_TO_FLAT  = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const ROOT_NOTES = ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"];
 
-const FLAT_KEYS = new Set(["F", "Bb", "Eb", "Ab", "Db", "Gb", "Dm", "Gm", "Cm", "Fm", "Bbm", "Ebm"]);
-
-const DEGREE_TO_SEMITONES: Record<string, number> = {
-  "1": 0,
-  b2: 1, "#1": 1,
-  "2": 2,
-  b3: 3, "#2": 3,
-  "3": 4,
-  "4": 5,
-  b5: 6, "#4": 6,
-  "5": 7,
-  b6: 8, "#5": 8,
-  "6": 9,
-  b7: 10, "#6": 10,
-  "7": 11,
+const SEMITONES: Record<string, number> = {
+  "C": 0, "C#": 1, "Db": 1, "D": 2, "D#": 3, "Db2": 1, "Eb": 3, "E": 4,
+  "F": 5, "F#": 6, "Gb": 6, "G": 7, "G#": 8, "Ab": 8, "A": 9, "A#": 10, "Bb": 10, "B": 11,
 };
 
-const DEGREE_TO_ROMAN: Record<string, string> = {
-  "1": "I",
-  "2": "II",
-  "3": "III",
-  "4": "IV",
-  "5": "V",
-  "6": "VI",
-  "7": "VII",
-};
-
-const SINGLE_NASHVILLE_RE = /^([b#]?[1-7])(maj|min|dim|aug|sus|add|m|M|2|4|5|6|7|9|11|13|[#b+\-°()])*$/;
-
-interface KeyInfo {
-  semi: number;
-  isMinor: boolean;
-  useFlats: boolean;
+/**
+ * Convention: Chords in [] ALWAYS start with a scale degree number (1-7).
+ * Anything in [] that does not start with 1-7 (e.g. [Puente - Entra fuerte]) is a section/cue, not a chord.
+ */
+export function isChordToken(token: string): boolean {
+  const trimmed = token.trim().replace(/^\[\vert{}\]$/g, "").trim();
+  return /^[1-7][b#]?/.test(trimmed);
 }
 
-function getReferenceKeyInfo(keySignature: string): KeyInfo | null {
-  const trimmed = keySignature.trim();
-  if (!trimmed) return null;
+export function transformChordProToken(token: string, mode: NotationMode, keySignature: string): string {
+  const trimmed = token.trim();
+  if (!trimmed) return "";
 
-  const m = trimmed.match(/^([A-G][#b]?)(m?)$/);
-  if (!m) return null;
-
-  const root = m[1];
-  const isMinor = m[2] === "m";
-  const semi = NOTE_TO_SEMITONE[root];
-  if (semi === undefined) return null;
-
-  return {
-    semi, // Always use the root note directly as 1 (e.g. Am -> A is 1)
-    isMinor,
-    useFlats: FLAT_KEYS.has(trimmed),
-  };
-}
-
-function convertSingleToken(
-  token: string,
-  targetMode: NotationMode,
-  keyInfo: KeyInfo | null,
-  isBassNote = false
-): string {
-  if (token.includes("/")) {
-    const [left, right] = token.split("/", 2);
-    const convLeft = convertSingleToken(left, targetMode, keyInfo, false);
-    const convRight = convertSingleToken(right, targetMode, keyInfo, true);
-    return `${convLeft}/${convRight}`;
+  const isNashville = isChordToken(trimmed);
+  if (!isNashville) {
+    return trimmed;
   }
 
-  const match = token.trim().match(/^([b#]?[1-7])(.*)$/);
-  if (!match || !SINGLE_NASHVILLE_RE.test(token.trim())) {
-    return token;
+  if (mode === "nashville") {
+    return trimmed;
   }
 
-  const degreeStr = match[1];
-  let suffix = match[2] || "";
+  if (mode === "chords") {
+    const match = trimmed.match(/^([1-7][b#]?)(.*)$/);
+    if (!match) return trimmed;
+    const [, degree, suffix] = match;
+    const baseRoot = NASHVILLE_MAP[degree] || "C";
 
-  // If the tone in B1 is minor (e.g. "Am") and degree is "1" without an explicit minor/major suffix, treat 1 as minor ("1m" -> "Am")
-  if (
-    !isBassNote &&
-    keyInfo?.isMinor &&
-    degreeStr === "1" &&
-    !suffix.startsWith("m") &&
-    !suffix.startsWith("M") &&
-    !suffix.startsWith("dim") &&
-    !suffix.startsWith("aug") &&
-    !suffix.startsWith("sus")
-  ) {
-    suffix = `m${suffix}`;
-  }
-
-  if (targetMode === "nashville" || (targetMode === "chords" && !keyInfo)) {
-    return token;
-  }
-
-  if (targetMode === "chords" && keyInfo) {
-    const offset = DEGREE_TO_SEMITONES[degreeStr];
-    if (offset === undefined) return token;
-    const noteIndex = (keyInfo.semi + offset) % 12;
-    const noteName = keyInfo.useFlats ? SEMITONE_TO_FLAT[noteIndex] : SEMITONE_TO_SHARP[noteIndex];
-    return `${noteName}${suffix}`;
-  }
-
-  if (targetMode === "roman") {
-    const accidental = degreeStr.startsWith("b") || degreeStr.startsWith("#") ? degreeStr[0] : "";
-    const numDigit = accidental ? degreeStr.slice(1) : degreeStr;
-    let roman = DEGREE_TO_ROMAN[numDigit] || numDigit;
-
-    const isMinorChord = suffix.startsWith("m") && !suffix.startsWith("maj");
-    if (isMinorChord) {
-      roman = roman.toLowerCase();
-      return `${accidental}${roman}${suffix.slice(1)}`;
+    if (!keySignature || keySignature.trim() === "") {
+      return `${baseRoot}${suffix}`;
     }
-    return `${accidental}${roman}${suffix}`;
+
+    const keyMatch = keySignature.trim().match(/^([A-G][b#]?)/);
+    if (!keyMatch) return `${baseRoot}${suffix}`;
+    const songKey = keyMatch[1];
+    const semitoneOffset = SEMITONES[songKey] || 0;
+
+    const rootMatch = baseRoot.match(/^([A-G][b#]?)/);
+    if (!rootMatch) return `${baseRoot}${suffix}`;
+    const rootNote = rootMatch[1];
+    const rootIdx = SEMITONES[rootNote] || 0;
+    const transposedIdx = (rootIdx + semitoneOffset) % 12;
+    const newRoot = ROOT_NOTES[(transposedIdx + 12) % 12];
+
+    return `${newRoot}${suffix}`;
   }
 
-  return token;
-}
+  if (mode === "roman") {
+    const romanMap: Record<string, { major: string; minor: string }> = {
+      "1": { major: "I", minor: "i" },
+      "2": { major: "II", minor: "ii" },
+      "3": { major: "III", minor: "iii" },
+      "4": { major: "IV", minor: "iv" },
+      "5": { major: "V", minor: "v" },
+      "6": { major: "VI", minor: "vi" },
+      "7": { major: "VII", minor: "vii" },
+    };
 
-export function transformChordProToken(
-  bracketContent: string,
-  targetMode: NotationMode,
-  keySignature: string
-): string {
-  const keyInfo = getReferenceKeyInfo(keySignature);
-  return convertSingleToken(bracketContent, targetMode, keyInfo, false);
+    const match = trimmed.match(/^([1-7][b#]?)(.*)$/);
+    if (!match) return trimmed;
+    const [, degree, suffix] = match;
+    const numKey = degree.charAt(0);
+    const isMinor = suffix.toLowerCase().includes("m") && !suffix.toLowerCase().includes("maj");
+    const entry = romanMap[numKey];
+    if (!entry) return trimmed;
+    const romanBase = isMinor ? entry.minor : entry.major;
+    const cleanSuffix = suffix.replace(/^m/i, "");
+    return `${romanBase}${cleanSuffix}`;
+  }
+
+  return trimmed;
 }
 
 export function isConfiguredSectionHeader(line: string, sectionKeywords: string[]): boolean {
   const trimmed = line.trim();
   if (!trimmed) return false;
 
-  const inner =
-    trimmed.startsWith("[") && trimmed.endsWith("]") && !trimmed.slice(1, -1).includes("[")
-      ? trimmed.slice(1, -1).trim()
-      : trimmed;
+  const isSingleBracketedLine =
+    trimmed.startsWith("[") &&
+    trimmed.endsWith("]") &&
+    !trimmed.slice(1, -1).includes("[") &&
+    !trimmed.slice(1, -1).includes("]");
 
-  return sectionKeywords.some((kw) => {
-    const cleanKw = kw.trim();
-    if (!cleanKw) return false;
-    const escaped = cleanKw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const re = new RegExp(`^${escaped}(\\s+\\d+|\\s*[:\\-])?$`, "i");
-    return re.test(inner);
-  });
+  const inner = isSingleBracketedLine ? trimmed.slice(1, -1).trim() : trimmed;
+  if (!inner) return false;
+
+  // STRICT RULE: If the inner text starts with a number (e.g. 1, 1sus4, 6m), it is a chord, NEVER a section header.
+  if (isChordToken(inner)) {
+    return false;
+  }
+
+  // If the entire line is wrapped in brackets (e.g. [Puente - Entra fuerte]) and does NOT start with a number,
+  // always treat it as a section header even if it isn't in sectionKeywords.
+  if (isSingleBracketedLine) {
+    return true;
+  }
+
+  const innerLower = inner.toLowerCase();
+
+  for (const kw of sectionKeywords) {
+    const cleanKw = kw.trim().toLowerCase();
+    if (!cleanKw) continue;
+    if (innerLower === cleanKw) return true;
+    if (innerLower.startsWith(cleanKw)) {
+      const rest = innerLower.slice(cleanKw.length).trim();
+      if (!rest || /^[\d:\-\s()]+/.test(rest)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
-export function splitIntoSectionBlocks(chordpro: string, sectionKeywords: string[]): ParsedBlock[] {
+export interface ParsedBlock {
+  header: string | null;
+  lines: string[];
+}
+
+export function splitIntoSectionBlocks(
+  chordpro: string,
+  sectionKeywords: string[],
+  deduplicate = false
+): ParsedBlock[] {
   const lines = chordpro.split(/\r?\n/);
   const blocks: ParsedBlock[] = [];
   let current: ParsedBlock = { header: null, lines: [] };
 
   const pushCleanedBlock = (blk: ParsedBlock) => {
-    // Trim leading and trailing empty lines so all cards align evenly
     let start = 0;
     while (start < blk.lines.length && blk.lines[start].trim() === "") start++;
     let end = blk.lines.length - 1;
@@ -190,5 +163,16 @@ export function splitIntoSectionBlocks(chordpro: string, sectionKeywords: string
   }
 
   pushCleanedBlock(current);
-  return blocks;
+
+  if (!deduplicate) return blocks;
+
+  const seen = new Set<string>();
+  return blocks.filter((b) => {
+    const normHeader = (b.header || "").replace(/^\[\vert{}\]$/g, "").trim().toLowerCase();
+    const normLines = b.lines.map((l) => l.trim()).join("\n");
+    const sig = `${normHeader}::${normLines}`;
+    if (seen.has(sig)) return false;
+    seen.add(sig);
+    return true;
+  });
 }

@@ -140,13 +140,14 @@ html, body, #root {
 }
 
 /* Override shadcn button SVG size constraints on Mobile & Tablet (< 1024px) */
-@media (max-width: 1023px) {
+/* Override shadcn button and icon SVG size constraints on Phones and Tablets (< 1280px) */
+@media (max-width: 1279px) {
   [data-slot="button"] svg:not(.no-scale),
   button svg:not(.no-scale),
   svg.lucide:not(.no-scale) {
-    width: 1.35rem !important;
-    height: 1.35rem !important;
-    min-width: 1.35rem !important;
-    min-height: 1.35rem !important;
+    width: 1.4rem !important;
+    height: 1.4rem !important;
+    min-width: 1.4rem !important;
+    min-height: 1.4rem !important;
   }
 }

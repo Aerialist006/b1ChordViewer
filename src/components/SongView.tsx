@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   B1ServiceSong,
@@ -9,6 +8,7 @@ import {
   UserConfig,
 } from "../types";
 import {
+  isChordToken,
   isConfiguredSectionHeader,
   splitIntoSectionBlocks,
   transformChordProToken,
@@ -29,6 +29,8 @@ import {
   Menu,
   Maximize2,
   Minimize2,
+  StickyNote,
+  X,
 } from "lucide-react";
 
 interface Props {
@@ -40,6 +42,39 @@ interface Props {
   onChangeConfig: (next: UserConfig) => void;
   onSelectSong: (song: B1ServiceSong) => void;
   onOpenMobileSidebar?: () => void;
+}
+
+const NOTES_STORAGE_KEY = "b1_song_notes";
+
+function getSongNoteKey(song: B1ServiceSong): string {
+  const anySong = song as unknown as Record<string, unknown>;
+  return String(anySong.song_id || anySong.id || song.title || song.plan_item_id);
+}
+
+function readSongNote(key: string): string {
+  try {
+    const raw = localStorage.getItem(NOTES_STORAGE_KEY);
+    if (!raw) return "";
+    const map = JSON.parse(raw) as Record<string, string>;
+    return map[key] || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeSongNote(key: string, value: string) {
+  try {
+    const raw = localStorage.getItem(NOTES_STORAGE_KEY);
+    const map: Record<string, string> = raw ? JSON.parse(raw) : {};
+    if (value.trim() === "") {
+      delete map[key];
+    } else {
+      map[key] = value;
+    }
+    localStorage.setItem(NOTES_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    // Ignore storage quota errors
+  }
 }
 
 export default function SongView({
@@ -59,6 +94,22 @@ export default function SongView({
   const zoom = config.zoom || 16;
   const [blocks, setBlocks] = useState<ParsedBlock[]>([]);
 
+  // Lightweight local note per song
+  const noteKey = getSongNoteKey(song);
+  const [noteText, setNoteText] = useState<string>(() => readSongNote(noteKey));
+  const [showNoteEditor, setShowNoteEditor] = useState<boolean>(false);
+
+  useEffect(() => {
+    const loaded = readSongNote(noteKey);
+    setNoteText(loaded);
+    setShowNoteEditor(Boolean(loaded.trim()));
+  }, [noteKey]);
+
+  function handleNoteChange(val: string) {
+    setNoteText(val);
+    writeSongNote(noteKey, val);
+  }
+
   const currentIndex = allSongsInService.findIndex(
     (s) => s.plan_item_id === song.plan_item_id
   );
@@ -70,15 +121,13 @@ export default function SongView({
 
   useEffect(() => {
     const shouldDeduplicate = config.layout === "blocks";
-    invoke<ParsedBlock[]>("parse_and_deduplicate_blocks", {
-      rawChordpro: song.raw_chordpro,
-      sectionKeywords: config.sectionKeywords,
-      deduplicate: shouldDeduplicate,
-    })
-      .then((res) => setBlocks(res))
-      .catch(() => {
-        setBlocks(splitIntoSectionBlocks(song.raw_chordpro, config.sectionKeywords));
-      });
+    setBlocks(
+      splitIntoSectionBlocks(
+        song.raw_chordpro,
+        config.sectionKeywords,
+        shouldDeduplicate
+      )
+    );
   }, [song.raw_chordpro, config.sectionKeywords, config.layout]);
 
   function adjustZoom(delta: number) {
@@ -171,12 +220,19 @@ export default function SongView({
     while ((match = regex.exec(line)) !== null) {
       if (match[0].length === 0) break;
       const rawBracket = match[1] || "";
-      const convertedChord = rawBracket
-        ? transformChordProToken(rawBracket, effectiveNotation, song.key_signature)
-        : "";
       const lyricChunk = match[2] || "";
 
-      const wordParts = lyricChunk.match(/\S+\s*|\s+/g) || [""];
+      // Only treat [...] as a chord if it starts with a number (1-7)
+      const isChord = rawBracket ? isChordToken(rawBracket) : false;
+      const convertedChord =
+        rawBracket && isChord
+          ? transformChordProToken(rawBracket, effectiveNotation, song.key_signature)
+          : "";
+
+      const combinedText =
+        rawBracket && !isChord ? `[${rawBracket}] ${lyricChunk}` : lyricChunk;
+
+      const wordParts = combinedText.match(/\S+\s*|\s+/g) || [""];
       wordParts.forEach((part, idx) => {
         wordTokens.push({
           chord: idx === 0 ? convertedChord : "",
@@ -213,11 +269,11 @@ export default function SongView({
 
   return (
     <div className="flex flex-col h-full relative">
-      {/* Sticky Stage HUD Toolbar — min-h-14 aligns border with AppSidebar h-14 */}
+      {/* Sticky Stage HUD Toolbar — Always single filled row with ellipsis on song title */}
       {!isFullScreen && (
-        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-2 px-3 sm:px-5 py-1.5 min-h-14 border-b border-border bg-background/90 backdrop-blur-md">
-          {/* Left: Mobile Menu + Prev/Next + Song Title */}
-          <div className="flex items-center gap-2 min-w-0">
+        <header className="sticky top-0 z-10 flex items-center justify-between gap-2 px-2.5 sm:px-4 lg:px-5 py-1.5 min-h-14 border-b border-border bg-background/90 backdrop-blur-md flex-nowrap w-full">
+          {/* Left: Mobile Menu + Prev/Next + Filled Title with Ellipsis + Badges */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0">
             {onOpenMobileSidebar && (
               <Button
                 variant="ghost"
@@ -234,78 +290,93 @@ export default function SongView({
               <Button
                 variant="outline"
                 size="icon"
-                className="size-9 lg:size-8"
+                className="size-8"
                 disabled={!prevSong}
                 onClick={() => prevSong && onSelectSong(prevSong)}
                 title={prevSong ? `Previous: ${prevSong.title}` : "First song"}
               >
-                <ChevronLeft className="size-5 lg:size-4" />
+                <ChevronLeft className="size-4" />
               </Button>
               <Button
                 variant="outline"
                 size="icon"
-                className="size-9 lg:size-8"
+                className="size-8"
                 disabled={!nextSong}
                 onClick={() => nextSong && onSelectSong(nextSong)}
                 title={nextSong ? `Next: ${nextSong.title}` : "Last song"}
               >
-                <ChevronRight className="size-5 lg:size-4" />
+                <ChevronRight className="size-4" />
               </Button>
             </div>
 
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <h1 className="text-sm sm:text-base lg:text-lg font-bold tracking-tight truncate">
-                  {song.title}
-                </h1>
-                {hasTone ? (
-                  <Badge className="font-mono text-xs px-2 py-0">
-                    {song.key_signature}
-                  </Badge>
-                ) : (
-                  <Badge
-                    variant="outline"
-                    className="gap-1 text-xs text-amber-500 border-amber-500/40"
-                  >
-                    <AlertCircle className="size-3.5" />
-                    NNS
-                  </Badge>
-                )}
-                {song.bpm && (
-                  <Badge
-                    variant="secondary"
-                    className="hidden sm:inline-flex font-mono text-xs"
-                  >
-                    {song.bpm} BPM
-                  </Badge>
-                )}
-              </div>
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <h1
+                className="text-sm sm:text-base lg:text-lg font-bold tracking-tight truncate min-w-0"
+                title={song.title}
+              >
+                {song.title}
+              </h1>
+              {hasTone ? (
+                <Badge className="font-mono text-xs px-1.5 py-0 shrink-0">
+                  {song.key_signature}
+                </Badge>
+              ) : (
+                <Badge
+                  variant="outline"
+                  className="gap-1 text-xs text-amber-500 border-amber-500/40 shrink-0 px-1.5 py-0"
+                >
+                  <AlertCircle className="size-3 no-scale" />
+                  <span className="hidden sm:inline">NNS</span>
+                </Badge>
+              )}
+              {song.bpm && (
+                <Badge
+                  variant="secondary"
+                  className="hidden xl:inline-flex font-mono text-xs shrink-0"
+                >
+                  {song.bpm} BPM
+                </Badge>
+              )}
             </div>
           </div>
 
-          {/* Right: Notation + Layout + Zoom + Full Screen Button */}
-          <div className="flex flex-wrap items-center gap-1.5 ml-auto">
-            <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
-              {(["nashville", "chords", "roman"] as NotationMode[]).map((mode) => (
+          {/* Right: 5 | V | G + Icon-Only Layout + Zoom (with px) + Notes + Fullscreen */}
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+            {/* Chord Display Switcher: 5 | V | G on Mobile/Tablet, Full Labels on Desktop */}
+            <div className="inline-flex items-center rounded-lg border border-border bg-muted/40 p-0.5 shrink-0">
+              {(
+                [
+                  { id: "nashville", short: "5", full: "NNS" },
+                  { id: "roman", short: "V", full: "Roman" },
+                  { id: "chords", short: "G", full: "Chords" },
+                ] as { id: NotationMode; short: string; full: string }[]
+              ).map((item) => (
                 <button
-                  key={mode}
-                  onClick={() => onChangeConfig({ ...config, notation: mode })}
-                  className={`px-2 py-1 text-xs font-medium rounded-md capitalize transition-all ${
-                    config.notation === mode
-                      ? "bg-background text-foreground shadow-xs"
+                  key={item.id}
+                  onClick={() => onChangeConfig({ ...config, notation: item.id })}
+                  className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${
+                    config.notation === item.id
+                      ? "bg-background text-foreground shadow-xs font-bold"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
+                  title={`Notation: ${item.full}`}
                 >
-                  {mode === "nashville" ? "NNS" : mode}
+                  <span className="lg:hidden font-mono">{item.short}</span>
+                  <span className="hidden lg:inline">{item.full}</span>
                 </button>
               ))}
             </div>
 
-            <div className="inline-flex rounded-lg border border-border bg-muted/40 p-0.5">
+            {/* Layout Switcher: Icons Only on Mobile/Tablet */}
+            <div className="inline-flex items-center rounded-lg border border-border bg-muted/40 p-0.5 shrink-0">
               {(
                 [
                   { id: "full", icon: AlignLeft, label: "Full" },
-                  { id: "columns", icon: Columns3, label: `${config.columnCount || 2}C` },
+                  {
+                    id: "columns",
+                    icon: Columns3,
+                    label: `${config.columnCount || 2}C`,
+                  },
                   { id: "blocks", icon: LayoutGrid, label: "Blocks" },
                 ] as { id: LayoutMode; icon: any; label: string }[]
               ).map((item) => {
@@ -314,20 +385,22 @@ export default function SongView({
                   <button
                     key={item.id}
                     onClick={() => onChangeConfig({ ...config, layout: item.id })}
-                    className={`flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-all ${
+                    title={`Layout: ${item.label}`}
+                    className={`flex items-center justify-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md transition-all ${
                       config.layout === item.id
                         ? "bg-background text-foreground shadow-xs"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     <Icon className="size-4 lg:size-3.5" />
-                    <span className="hidden sm:inline">{item.label}</span>
+                    <span className="hidden lg:inline">{item.label}</span>
                   </button>
                 );
               })}
             </div>
 
-            <div className="flex items-center gap-0.5 rounded-lg border border-border bg-muted/40 px-1 py-0.5">
+            {/* Zoom Control: Keeps px */}
+            <div className="flex items-center gap-0.5 rounded-lg border border-border bg-muted/40 px-1 py-0.5 shrink-0">
               <Button
                 variant="ghost"
                 size="icon"
@@ -337,7 +410,9 @@ export default function SongView({
               >
                 <ZoomOut className="size-4 lg:size-3.5" />
               </Button>
-              <span className="text-xs font-mono w-9 text-center">{zoom}px</span>
+              <span className="text-xs font-mono px-1 text-center shrink-0">
+                {zoom}px
+              </span>
               <Button
                 variant="ghost"
                 size="icon"
@@ -350,7 +425,7 @@ export default function SongView({
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-7 lg:size-6 hidden sm:inline-flex"
+                className="size-7 lg:size-6 hidden lg:inline-flex"
                 onClick={() => onChangeConfig({ ...config, zoom: 16 })}
                 title="Reset Zoom (Cmd 0)"
               >
@@ -358,17 +433,55 @@ export default function SongView({
               </Button>
             </div>
 
+            {/* Client-Side Song Notes Toggle */}
+            <Button
+              variant={showNoteEditor || noteText.trim() ? "secondary" : "outline"}
+              size="icon"
+              className="size-8 relative shrink-0"
+              onClick={() => setShowNoteEditor((prev) => !prev)}
+              title="Song Notes (Saved locally)"
+            >
+              <StickyNote className="size-4" />
+              {noteText.trim() !== "" && (
+                <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-primary" />
+              )}
+            </Button>
+
+            {/* Full Screen Button */}
             <Button
               variant="outline"
               size="icon"
-              className="size-9 lg:size-8"
+              className="size-8 shrink-0"
               onClick={handleFullScreenToggle}
               title="Full Screen Chords Only (Press F)"
             >
-              <Maximize2 className="size-5 lg:size-4" />
+              <Maximize2 className="size-4" />
             </Button>
           </div>
         </header>
+      )}
+
+      {/* Lightweight Local Song Note Bar */}
+      {showNoteEditor && (
+        <div className="flex items-start gap-2 px-3 sm:px-5 py-2 border-b border-border bg-muted/30">
+          <StickyNote className="size-4 text-primary shrink-0 mt-1.5 no-scale" />
+          <textarea
+            value={noteText}
+            onChange={(e) => handleNoteChange(e.target.value)}
+            placeholder={`Personal notes for "${song.title}" (cues, dynamics, capo, transitions)...`}
+            rows={2}
+            className="w-full flex-1 bg-transparent text-xs sm:text-sm text-foreground placeholder:text-muted-foreground resize-y focus:outline-none leading-snug"
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={() => setShowNoteEditor(false)}
+            title="Hide note panel"
+          >
+            <X className="size-3.5 no-scale" />
+          </Button>
+        </div>
       )}
 
       {/* Floating Controls in Full Screen Mode */}
@@ -413,7 +526,7 @@ export default function SongView({
             <ZoomOut className="size-5 lg:size-4" />
           </Button>
           <span className="text-xs font-mono px-1 text-muted-foreground select-none">
-            {zoom}
+            {zoom}px
           </span>
           <Button
             variant="ghost"
@@ -439,7 +552,7 @@ export default function SongView({
         </div>
       )}
 
-      {/* Main Chord Sheet Canvas — Compact p-3 on mobile/tablet so cards fit comfortably */}
+      {/* Main Chord Sheet Canvas */}
       <div
         className="flex-1 p-3 sm:p-4 lg:p-6 overflow-y-auto"
         style={{ fontSize: `${zoom}px` }}
