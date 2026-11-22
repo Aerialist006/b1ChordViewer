@@ -1,5 +1,6 @@
 export type NotationMode = "nashville" | "chords" | "roman";
 export type LayoutMode = "full" | "columns" | "blocks";
+export type AccidentalPreference = "auto" | "flats" | "sharps";
 
 export type PastelColorId =
   | "lavender"
@@ -13,9 +14,9 @@ export type PastelColorId =
 
 export interface PastelPreset {
   id: PastelColorId;
-  swatch: string;    // Soft pastel hex for dark mode & swatch circles
-  lightHex: string;  // High-contrast shade for light mode backgrounds
-  fgOnDark: string;  // Foreground text color inside primary buttons in dark mode
+  swatch: string;
+  lightHex: string;
+  fgOnDark: string;
 }
 
 export const PASTEL_PRESETS: PastelPreset[] = [
@@ -30,15 +31,16 @@ export const PASTEL_PRESETS: PastelPreset[] = [
 ];
 
 export interface UserConfig {
-  apiKey: string;            // User-provided Church B1 API Token
+  apiKey: string;
   notation: NotationMode;
+  accidentalPreference: AccidentalPreference;
   layout: LayoutMode;
   columnCount: number;
   sectionKeywords: string[];
   darkMode: boolean;
   zoom: number;
-  accentColor: PastelColorId; // Controls UI buttons, active tabs, badges & rings
-  chordColor: PastelColorId;  // Controls chord symbols above lyrics independently
+  accentColor: PastelColorId;
+  chordColor: PastelColorId;
 }
 
 export interface B1PlanSummary {
@@ -47,9 +49,17 @@ export interface B1PlanSummary {
   service_date: string | null;
 }
 
+export interface B1ArrangementKey {
+  id: string;
+  arrangement_id: string;
+  key_signature: string;
+  short_description: string;
+}
+
 export interface B1ServiceSong {
   plan_item_id: string;
   arrangement_key_id: string;
+  arrangement_id: string;
   title: string;
   artist: string;
   key_signature: string;
@@ -61,6 +71,18 @@ export interface B1ServicePayload {
   active_plan: B1PlanSummary;
   all_plans: B1PlanSummary[];
   songs: B1ServiceSong[];
+}
+
+export interface B1LibrarySong {
+  id: string;
+  name: string;
+}
+
+export interface B1SongArrangementOption {
+  arrangement_id: string;
+  arrangement_name: string;
+  artist: string;
+  keys: B1ArrangementKey[];
 }
 
 export interface ParsedBlock {

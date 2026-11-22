@@ -24,6 +24,7 @@ import { KeyRound, Loader2, RefreshCw, Settings, Menu } from "lucide-react";
 const DEFAULT_CONFIG: UserConfig = {
   apiKey: "",
   notation: "nashville",
+  accidentalPreference: "auto",
   layout: "blocks",
   columnCount: 2,
   darkMode: true,
@@ -44,13 +45,8 @@ const DEFAULT_CONFIG: UserConfig = {
   ],
 };
 
-export function isTabletOrDesktop(): boolean {
-  if (window.innerWidth >= 1024) return true;
-
-  const ratio = window.innerWidth / window.innerHeight;
-  const isLandscapeTablet = ratio >= 1.2 && ratio <= 2.2 && window.innerHeight >= 550;
-  
-  return isLandscapeTablet;
+function checkIsPhoneViewport() {
+  return window.innerWidth < 768 || window.innerHeight < 520;
 }
 
 export default function App() {
@@ -59,12 +55,11 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("service");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isPhone, setIsPhone] = useState(checkIsPhoneViewport);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [isFullScreen, setIsFullScreen] = useState(false);
 
-
-  
   const [config, setConfig] = useState<UserConfig>(() => {
     const saved = localStorage.getItem("b1_user_config");
     return saved ? { ...DEFAULT_CONFIG, ...JSON.parse(saved) } : DEFAULT_CONFIG;
@@ -72,7 +67,6 @@ export default function App() {
 
   const [onboardingKey, setOnboardingKey] = useState(config.apiKey || "");
 
-  // Sync Tailwind .dark class AND dynamic Pastel Theme CSS variables on <html>
   useEffect(() => {
     const root = document.documentElement;
     if (config.darkMode) {
@@ -100,7 +94,23 @@ export default function App() {
     root.style.setProperty("--chord-color", activeChordHex);
   }, [config.darkMode, config.accentColor, config.chordColor]);
 
-  // Cmd + B shortcut to collapse/expand sidebar
+  useEffect(() => {
+    function handleOrientationOrResize() {
+      window.scrollTo(0, 0);
+      const phoneNow = checkIsPhoneViewport();
+      setIsPhone(phoneNow);
+      if (!phoneNow) {
+        setMobileMenuOpen(false);
+      }
+    }
+    window.addEventListener("resize", handleOrientationOrResize);
+    window.addEventListener("orientationchange", handleOrientationOrResize);
+    return () => {
+      window.removeEventListener("resize", handleOrientationOrResize);
+      window.removeEventListener("orientationchange", handleOrientationOrResize);
+    };
+  }, []);
+
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
@@ -119,9 +129,13 @@ export default function App() {
 
   async function loadService(
     planId: string | null = null,
-    overrideApiKey?: string
+    overrideApiKey?: string,
+    silent = false,
+    preferredPlanItemId?: string
   ) {
-    setLoading(true);
+    if (!silent) {
+      setLoading(true);
+    }
     setErr("");
     const tokenToUse =
       overrideApiKey !== undefined ? overrideApiKey : config.apiKey;
@@ -131,13 +145,44 @@ export default function App() {
         apiToken: tokenToUse || null,
       });
       setService(data);
-      setSelectedSong(data.songs[0] || null);
-      setActiveTab("service");
+
+      if (silent && selectedSong) {
+        const refreshedSong =
+          (preferredPlanItemId &&
+            data.songs.find((s) => s.plan_item_id === preferredPlanItemId)) ||
+          data.songs.find((s) => s.plan_item_id === selectedSong.plan_item_id) ||
+          data.songs.find((s) => s.arrangement_id === selectedSong.arrangement_id) ||
+          data.songs[0] ||
+          null;
+        setSelectedSong(refreshedSong);
+      } else {
+        setSelectedSong(data.songs[0] || null);
+        if (!silent) {
+          setActiveTab("service");
+        }
+      }
     } catch (e) {
-      setErr(String(e));
+      if (!silent) {
+        setErr(String(e));
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
+  }
+
+  function handleSongUpdated(updatedSong: B1ServiceSong) {
+    setSelectedSong(updatedSong);
+    setService((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        songs: prev.songs.map((s) =>
+          s.plan_item_id === updatedSong.plan_item_id ? updatedSong : s
+        ),
+      };
+    });
   }
 
   useEffect(() => {
@@ -146,10 +191,10 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-dvh bg-background text-foreground gap-3">
-        <Loader2 className="h-7 w-7 animate-spin text-primary" />
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-background text-foreground gap-3">
+        <Loader2 className="size-7 animate-spin text-primary" />
         <p className="text-sm text-muted-foreground font-medium">
-          Syncing service plans & charts from B1.church...
+          Syncing service plans &amp; charts from B1.church...
         </p>
       </div>
     );
@@ -157,11 +202,11 @@ export default function App() {
 
   if (err || !service) {
     return (
-      <div className="flex flex-col items-center justify-center h-dvh bg-background text-foreground p-6">
-        <Card className="w-full max-w-lg shadow-md">
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-background text-foreground p-4 overflow-y-auto">
+        <Card className="w-full max-w-md shadow-md">
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <KeyRound className="h-5 w-5 text-primary" />
+            <div className="flex items-center gap-2.5">
+              <KeyRound className="size-5 text-primary shrink-0" />
               <CardTitle className="text-lg">Connect Your Church B1 API</CardTitle>
             </div>
             <CardDescription>
@@ -188,14 +233,12 @@ export default function App() {
                 placeholder="cak_your_church_api_key_here..."
                 value={onboardingKey}
                 onChange={(e) => setOnboardingKey(e.target.value)}
-                className="font-mono text-xs"
+                className="font-mono text-xs h-10"
               />
-              <div className="flex gap-2">
-                <Button type="submit" className="w-full gap-2">
-                  <RefreshCw className="h-4 w-4" />
-                  Save Key & Connect
-                </Button>
-              </div>
+              <Button type="submit" className="w-full h-10 gap-2">
+                <RefreshCw className="size-4" />
+                Save Key &amp; Connect
+              </Button>
             </form>
           </CardContent>
         </Card>
@@ -203,45 +246,35 @@ export default function App() {
     );
   }
 
-const hideChrome = isFullScreen && activeTab === "song";
+  const hideChrome = isFullScreen && activeTab === "song";
 
   return (
-    <div
-      className="flex h-dvh w-screen overflow-hidden bg-background text-foreground relative"
-      style={{
-        paddingTop: "env(safe-area-inset-top, 24px)",
-        paddingBottom: "env(safe-area-inset-bottom, 16px)",
-        paddingLeft: "env(safe-area-inset-left, 0px)",
-        paddingRight: "env(safe-area-inset-right, 0px)",
-      }}
-    >
-      {/* Mobile Backdrop Overlay */}
-      {!hideChrome && mobileMenuOpen && (
+    <div className="fixed inset-0 flex overflow-hidden bg-background text-foreground">
+      {!hideChrome && isPhone && mobileMenuOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-xs md:hidden"
+          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-xs"
           onClick={() => setMobileMenuOpen(false)}
         />
       )}
 
-      {/* Sidebar — Hidden when Full Screen Chords Mode is active */}
       {!hideChrome && (
         <div
-          className={`fixed inset-y-0 left-0 z-40 flex md:static md:z-auto transition-transform duration-200 ${
-            mobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-          }`}
-          style={{
-            paddingTop: "env(safe-area-inset-top, 24px)",
-            paddingBottom: "env(safe-area-inset-bottom, 16px)",
-          }}
+          className={
+            isPhone
+              ? `fixed inset-y-0 left-0 z-40 flex transition-transform duration-200 ${
+                  mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+                }`
+              : "static flex shrink-0"
+          }
         >
           <AppSidebar
             service={service}
             selectedSong={selectedSong}
             activeTab={activeTab}
-            collapsed={sidebarCollapsed}
+            collapsed={isPhone ? false : sidebarCollapsed}
             config={config}
             onToggleCollapse={() => {
-              if (window.innerWidth < 768) {
+              if (isPhone) {
                 setMobileMenuOpen(false);
               } else {
                 setSidebarCollapsed(!sidebarCollapsed);
@@ -263,36 +296,34 @@ const hideChrome = isFullScreen && activeTab === "song";
         </div>
       )}
 
-      {/* Active View Area */}
-      <main className="w-full flex flex-col overflow-y-auto">
-        {!hideChrome && activeTab !== "song" && (
-          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-2.5 px-4 py-2.5 border-b border-border md:hidden bg-background/90 backdrop-blur-md sticky top-0 z-20">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-11 w-11 shrink-0"
-              onClick={() => setMobileMenuOpen(true)}
-              title="Open Menu & Setlist"
-            >
-              <Menu className="h-6 w-6" />
-            </Button>
-
-            <span className="text-base font-bold truncate text-center px-1">
-              {activeTab === "config"
-                ? "Studio Settings"
-                : service.active_plan.name}
-            </span>
+      <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-y-auto">
+        {!hideChrome && isPhone && activeTab !== "song" && (
+          <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border min-h-14 bg-background/90 backdrop-blur-md sticky top-0 z-20">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Button
+                variant="outline"
+                size="icon"
+                className="size-10 shrink-0"
+                onClick={() => setMobileMenuOpen(true)}
+                title="Open Menu & Setlist"
+              >
+                <Menu className="size-5" />
+              </Button>
+              <span className="text-base font-bold truncate">
+                {activeTab === "config" ? "Studio Settings" : service.active_plan.name}
+              </span>
+            </div>
 
             <Button
               variant={activeTab === "config" ? "secondary" : "ghost"}
               size="icon"
-              className="h-11 w-11 shrink-0"
+              className="size-10 shrink-0"
               onClick={() =>
                 setActiveTab(activeTab === "config" ? "service" : "config")
               }
               title="Toggle Settings"
             >
-              <Settings className="h-6 w-6" />
+              <Settings className="size-5" />
             </Button>
           </div>
         )}
@@ -311,6 +342,7 @@ const hideChrome = isFullScreen && activeTab === "song";
         {activeTab === "song" && selectedSong && (
           <SongView
             song={selectedSong}
+            activePlanId={service.active_plan.id}
             allSongsInService={service.songs}
             config={config}
             isFullScreen={isFullScreen}
@@ -319,7 +351,16 @@ const hideChrome = isFullScreen && activeTab === "song";
             }
             onChangeConfig={handleUpdateConfig}
             onSelectSong={(s) => setSelectedSong(s)}
-            onOpenMobileSidebar={() => setMobileMenuOpen(true)}
+            onReloadSong={(preferredPlanItemId) =>
+              loadService(
+                service.active_plan.id,
+                undefined,
+                true,
+                preferredPlanItemId
+              )
+            }
+            onSongUpdated={handleSongUpdated}
+            onOpenMobileSidebar={isPhone ? () => setMobileMenuOpen(true) : undefined}
           />
         )}
 
@@ -332,7 +373,7 @@ const hideChrome = isFullScreen && activeTab === "song";
               setActiveTab("song");
             }}
             onSelectPlan={(planId) => loadService(planId)}
-            onRefresh={() => loadService(service.active_plan.id)}
+            onRefresh={() => loadService(service.active_plan.id, undefined, true)}
           />
         )}
       </main>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  AccidentalPreference,
   LayoutMode,
   NotationMode,
   PASTEL_PRESETS,
@@ -49,8 +50,14 @@ export default function ConfigView({
   const [apiKeyDraft, setApiKeyDraft] = useState(config.apiKey || "");
   const [showApiKey, setShowApiKey] = useState(false);
 
+  const accidentalPref = config.accidentalPreference || "auto";
+
   function setNotation(notation: NotationMode) {
     onChangeConfig({ ...config, notation });
+  }
+
+  function setAccidentalPreference(accidentalPreference: AccidentalPreference) {
+    onChangeConfig({ ...config, accidentalPreference });
   }
 
   function setLayout(layout: LayoutMode) {
@@ -139,7 +146,7 @@ export default function ConfigView({
             </div>
             <Button type="submit" className="gap-2 shrink-0 h-10 lg:h-9">
               <RefreshCw className="size-5 lg:size-4" />
-              Save & Sync B1
+              Save &amp; Sync B1
             </Button>
           </form>
         </CardContent>
@@ -152,7 +159,7 @@ export default function ConfigView({
             <div className="flex items-center gap-2.5">
               <Palette className="size-5 lg:size-4 text-primary shrink-0" />
               <CardTitle className="text-base">
-                Pastel Stage Palette & Chord Colors
+                Pastel Stage Palette &amp; Chord Colors
               </CardTitle>
             </div>
             <div className="flex items-center gap-2">
@@ -182,7 +189,6 @@ export default function ConfigView({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-          {/* Accent Color Palette */}
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               UI Accent
@@ -217,7 +223,6 @@ export default function ConfigView({
             </div>
           </div>
 
-          {/* Chord Color Palette */}
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Chords
@@ -251,7 +256,6 @@ export default function ConfigView({
             </div>
           </div>
 
-          {/* Live Mini Preview */}
           <div className="rounded-xl border border-border bg-card/90 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="font-mono text-sm leading-tight">
               <div className="flex flex-wrap items-end">
@@ -287,7 +291,9 @@ export default function ConfigView({
                     style={{ color: "var(--chord-color)" }}
                   >
                     {config.notation === "chords"
-                      ? "Fmaj7 "
+                      ? accidentalPref === "sharps"
+                        ? "F#maj7 "
+                        : "Gbmaj7 "
                       : config.notation === "roman"
                         ? "IVmaj7 "
                         : "4maj7 "}
@@ -303,7 +309,7 @@ export default function ConfigView({
         </CardContent>
       </Card>
 
-      {/* 2. Chord Notation System */}
+      {/* 2. Chord Notation System + Flats / Sharps Preference */}
       <Card>
         <CardHeader>
           <div className="flex items-center gap-2.5">
@@ -312,63 +318,94 @@ export default function ConfigView({
           </div>
           <CardDescription>
             B1 stores charts in Nashville numbers by default. Choose how your
-            screen renders them.
+            screen renders them and whether accidentals appear as flats or sharps.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {(
-            [
-              {
-                id: "nashville",
-                title: "Nashville Numbers",
-                sample: "1 · 4 · 5 · 6m",
-                desc: "Displays scale degrees relative to the song key.",
-              },
-              {
-                id: "chords",
-                title: "Standard Chords",
-                sample: "C · F · G · Am",
-                desc: "Auto-transposes from song tone (falls back to Nashville if tone is blank).",
-              },
-              {
-                id: "roman",
-                title: "Roman Numerals",
-                sample: "I · IV · V · vi",
-                desc: "Classical harmonic analysis with lowercase minor chords.",
-              },
-            ] as {
-              id: NotationMode;
-              title: string;
-              sample: string;
-              desc: string;
-            }[]
-          ).map((opt) => {
-            const active = config.notation === opt.id;
-            return (
-              <button
-                key={opt.id}
-                onClick={() => setNotation(opt.id)}
-                className={`flex flex-col justify-between p-3.5 rounded-xl border text-left transition-all ${
-                  active
-                    ? "border-primary bg-primary/10 ring-1 ring-primary"
-                    : "border-border hover:bg-accent/50"
-                }`}
-              >
-                <div>
-                  <span className="font-semibold text-sm">{opt.title}</span>
-                  <p
-                    className="font-mono text-xs font-bold mt-1.5"
-                    style={{ color: "var(--chord-color)" }}
-                  >
-                    {opt.sample}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
-                    {opt.desc}
-                  </p>
-                </div>
-              </button>
-            );
-          })}
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {(
+              [
+                {
+                  id: "nashville",
+                  title: "Nashville Numbers",
+                  sample: "1 · 4 · 5 · 6m",
+                  desc: "Displays scale degrees relative to the song key.",
+                },
+                {
+                  id: "chords",
+                  title: "Standard Chords",
+                  sample: "C · F · G · Am",
+                  desc: "Auto-transposes from song tone (falls back to Nashville if tone is blank).",
+                },
+                {
+                  id: "roman",
+                  title: "Roman Numerals",
+                  sample: "I · IV · V · vi",
+                  desc: "Classical harmonic analysis with lowercase minor chords.",
+                },
+              ] as {
+                id: NotationMode;
+                title: string;
+                sample: string;
+                desc: string;
+              }[]
+            ).map((opt) => {
+              const active = config.notation === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => setNotation(opt.id)}
+                  className={`flex flex-col justify-between p-3.5 rounded-xl border text-left transition-all ${
+                    active
+                      ? "border-primary bg-primary/10 ring-1 ring-primary"
+                      : "border-border hover:bg-accent/50"
+                  }`}
+                >
+                  <div>
+                    <span className="font-semibold text-sm">{opt.title}</span>
+                    <p
+                      className="font-mono text-xs font-bold mt-1.5"
+                      style={{ color: "var(--chord-color)" }}
+                    >
+                      {opt.sample}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                      {opt.desc}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Flats / Sharps Display Preference */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border bg-muted/30">
+            <div>
+              <p className="text-sm font-medium">Accidental Display (Flats vs. Sharps)</p>
+              <p className="text-xs text-muted-foreground">
+                Force transposed chords to display using flats (Db, Eb, Gb) or sharps (C#, D#, F#).
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {(
+                [
+                  { id: "auto", label: "Auto" },
+                  { id: "flats", label: "Flats (♭)" },
+                  { id: "sharps", label: "Sharps (#)" },
+                ] as { id: AccidentalPreference; label: string }[]
+              ).map((opt) => (
+                <Button
+                  key={opt.id}
+                  size="sm"
+                  variant={accidentalPref === opt.id ? "default" : "outline"}
+                  onClick={() => setAccidentalPreference(opt.id)}
+                  className="h-9 lg:h-8"
+                >
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -403,7 +440,7 @@ export default function ConfigView({
                   id: "blocks",
                   title: "Deduplicated Section Cards",
                   icon: LayoutGrid,
-                  desc: "Wraps unique Verso, Coro, and Puente sections into responsive cards.",
+                  desc: "Wraps unique verse sections into responsive cards.",
                 },
               ] as { id: LayoutMode; title: string; icon: any; desc: string }[]
             ).map((opt) => {
@@ -487,7 +524,7 @@ export default function ConfigView({
             className="flex gap-2"
           >
             <Input
-              placeholder="Add custom section header (e.g. Estribillo, Interludio, Espontáneo)..."
+              placeholder="Add custom section header (e.g. Verse, Chorus, Bridge)..."
               value={newSectionInput}
               onChange={(e) => setNewSectionInput(e.target.value)}
               className="h-10 lg:h-9"
